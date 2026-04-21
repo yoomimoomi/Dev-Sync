@@ -1,28 +1,32 @@
-from pydantic import BaseModel
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Enum, JSON, TypeDecorator
-from sqlalchemy.dialects import postgresql
+from typing import Optional
+
+from sqlalchemy import String, PrimaryKeyConstraint, UniqueConstraint, CHAR
 from sqlalchemy.dialects.postgresql import ARRAY
+from sqlalchemy.orm import relationship, Mapped, mapped_column
 from app.db.base import Base
-from app.schemas.grade import Grade
-
-class ChoiceArray(TypeDecorator):
-    impl = JSON
-    cache_ok = True
-
-    def load_dialect_impl(self, dialect):
-        if dialect.name == 'postgresql':
-            return dialect.type_descriptor(ARRAY(String))
-        return dialect.type_descriptor(JSON)
 
 class Account(Base):
-    __tablename__ = "accounts"
-    user_id = Column(String(10), primary_key=True, index=True)
-    name = Column(String(50),unique=True,index=True,nullable=False)
-    password_hash = Column(String(15), nullable=False)
-    grade = Column(Enum(Grade), nullable=False)
-    roles = Column(ChoiceArray, default=[])
-    skills = Column(ChoiceArray, default=[])
-    technologies = Column(ChoiceArray, default=[])
-    notifications = Column(ChoiceArray, default=[])
-    comments = Column(ChoiceArray, default=[])
-    projects = Column(ChoiceArray, default=[])
+    __tablename__ = 'accounts'
+    __table_args__ = (
+        PrimaryKeyConstraint('user_id', name='accounts_pkey'),
+        UniqueConstraint('email', name='accounts_email_key')
+    )
+
+    user_id: Mapped[str] = mapped_column(CHAR(10), primary_key=True)
+    password_hash: Mapped[Optional[str]] = mapped_column(String(15))
+    name: Mapped[Optional[str]] = mapped_column(String(50))
+    email: Mapped[Optional[str]] = mapped_column(String(50))
+    grade: Mapped[Optional[str]] = mapped_column(String(9))
+    roles: Mapped[Optional[list[str]]] = mapped_column(ARRAY(String(length=20)))
+    skills: Mapped[Optional[list[str]]] = mapped_column(ARRAY(String(length=20)))
+    technologies: Mapped[Optional[list[str]]] = mapped_column(ARRAY(String(length=20)))
+
+    projects: Mapped[list['Project']] = relationship('Project', back_populates='owner')
+    joined_teams: Mapped[list['Team']] = relationship(
+        'Team',
+        secondary='accountteams',
+        back_populates='members'
+    )
+    applications: Mapped[list['Application']] = relationship('Application', back_populates='user')
+    comments: Mapped[list['Comment']] = relationship('Comment', back_populates='user')
+    messages: Mapped[list['Message']] = relationship('Message', back_populates='user')
