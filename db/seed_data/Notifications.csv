@@ -1,0 +1,4 @@
+user_id,project_id,title,content,created_at
+U000000002,P000000001,Application Accepted,You have been accepted into Campus Study App.,2026-03-20 09:45:00
+U000000004,P000000001,New Team Message,Alice sent a new message in your project team.,2026-03-20 10:35:00
+U000000006,P000000002,Application Accepted,You have been accepted into Budget Tracker.,2026-03-22 14:45:00

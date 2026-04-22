@@ -1,0 +1,7 @@
+user_id,password_hash,name,email,grade,roles,skills,technologies
+U000000001,hash123,Alice Johnson,alice@school.edu,Freshman,{Frontend},"{""UI Design"",""Communication""}","{React,CSS}"
+U000000002,hash234,Brian Lee,brian@school.edu,Sophomore,{Backend},"{APIs,Databases}","{Java,PostgreSQL}"
+U000000003,hash345,Carla Smith,carla@school.edu,Junior,{Fullstack},"{Leadership,""Web Dev""}","{Node.js,React}"
+U000000004,hash456,David Kim,david@school.edu,Senior,{Designer},"{Figma,Branding}","{Figma,Photoshop}"
+U000000005,hash567,Emma Davis,emma@school.edu,Sophomore,{Mobile},"{""Problem Solving"",Testing}","{Flutter,Firebase}"
+U000000006,hash678,Frank Miller,frank@school.edu,Junior,"{Backend,DevOps}","{Cloud,Databases}","{Python,Docker}"

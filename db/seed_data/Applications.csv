@@ -1,0 +1,5 @@
+user_id,project_id,status,content,created_at
+U000000002,P000000001,Accepted,'I have experience with Java and PostgreSQL.',2026-03-19 18:00:00
+U000000004,P000000001,Accepted,'I would like to contribute as a designer.',2026-03-19 19:30:00
+U000000006,P000000002,Accepted,'I can help with backend infrastructure and deployment.',2026-03-21 12:00:00
+U000000001,P000000002,Pending,'I am interested in helping with frontend work.',2026-03-23 8:00:00

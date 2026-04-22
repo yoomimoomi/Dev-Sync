@@ -1,0 +1,6 @@
+message_ID,team_ID,user_ID,content,created_at
+M000000001,P000000001,U000000001,Welcome to the Campus Study App project!,2026-03-20 10:30:00
+M000000002,P000000001,U000000002,I can help with the backend and database.,2026-03-20 11:00:00
+M000000003,P000000001,U000000004,I will start working on some UI mockups.,2026-03-20 11:15:00
+M000000004,P000000002,U000000003,Let us decide on the API structure first.,2026-03-22 15:00:00
+M000000005,P000000002,U000000006,I can set up the database and deployment.,2026-03-22 15:20:00

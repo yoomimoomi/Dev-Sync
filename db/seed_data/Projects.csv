@@ -1,0 +1,4 @@
+project_id,user_id,title,description,status,grade,roles,skills,technologies,created_at
+P000000001,U000000001,Campus Study App,An app that helps students find study groups and available rooms.,Open,Freshman,"{Backend,Designer}","{Databases,UI Design}","{Java,PostgreSQL}",2026-03-20 10:00:00
+P000000002,U000000003,Budget Tracker,A web app for students to track expenses and budgets.,Open,Sophomore,"{Frontend,Backend}","{Web Dev,APIs}","{React,Node.js}",2026-03-22 14:30:00
+P000000003,U000000005,Fitness Challenge,A mobile app where friends can join fitness challenges.,Closed,Junior,{Designer},"{Branding,Testing}","{Flutter,Firebase}",2026-03-25 09:15:00
