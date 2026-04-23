@@ -1,32 +1,29 @@
-from pydantic import BaseModel, EmailStr, Field
-from typing import List
+from pydantic import BaseModel, EmailStr,Field, ConfigDict
+from typing import List, Optional
 
-from app.schemas.grade import Grade
+from sqlalchemy import String
 
 
-class AccountBase(BaseModel):
-    username: str = Field(min_length=3, max_length=50)
+class AccountCreate(BaseModel):
+    name : str = Field( ..., max_length=50)
+    email : EmailStr
+    password : str = Field(String,min_length=8)
+    grade: Optional[str] = Field(None, max_length=10)
+    roles : List[str] = []
+    skills : List[str] = []
+    technologies : List[str] = []
+
+
+
+
+class AccountRead(BaseModel):
     user_id: str
-    firstname: str
-    lastname: str
-    email: EmailStr
-    grade: Grade
-    roles: List[str] = Field(default_factory=list,max_length=50)
-    technologies: List[str] = Field(default_factory=list,max_length=50)
-    skills: List[str] = Field(default_factory=list,max_length=50)
-    projects: List[str] = Field(default_factory=list,max_length=50)
-    comments: List[str] = Field(default_factory=list)
-    notifications: List[str] = Field(default_factory=list)
+    name: str
+    email: str
+    grade: str | None
+    roles: List[str] = []
+    skills: List[str] = []
+    technologies: List[str] = []
 
-class AccountIn(AccountBase):
-    password : str
-
-class AccountOut(AccountBase):
-    pass
-
-class AccountInDB(AccountBase):
-    hashed_password: str
-
-
-
-
+    class Config:
+        from_attributes=True
