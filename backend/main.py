@@ -1,5 +1,5 @@
+import app.models
 from random import randrange
-
 from fastapi import FastAPI, Depends, HTTPException, APIRouter
 from fastapi.security import OAuth2PasswordBearer
 from typing import Annotated
@@ -7,7 +7,6 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
 from app.db.base import get_db, Base, DATABASE_URL
-from app import models
 from app.models.account import Account
 from app.schemas.account import AccountRead, AccountCreate
 
@@ -82,3 +81,4 @@ async def create_user(user_in: AccountCreate, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(new_user)
     return new_user
+
