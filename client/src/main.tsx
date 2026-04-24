@@ -1,10 +1,39 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
+import { createBrowserRouter, Navigate, RouterProvider } from 'react-router-dom'
+import '@fontsource/geist-sans/400.css'
+import '@fontsource/geist-sans/500.css'
+import '@fontsource/geist-sans/600.css'
+import '@fontsource/geist-sans/700.css'
+import '@fontsource/geist-mono/400.css'
+import '@fontsource/geist-mono/500.css'
 import './index.css'
-import App from './App.tsx'
+import { AuthProvider } from './lib/auth-context'
+import { SearchProvider } from './lib/search-context'
+import { ThemeProvider } from './lib/theme-context'
+import { CreateProjectPage } from './pages/CreateProjectPage'
+import { HomePage } from './pages/HomePage'
+import { ManageProjectsPage } from './pages/ManageProjectsPage'
+import { ProfilePage } from './pages/ProfilePage'
+import { ProjectPage } from './pages/ProjectPage'
+
+const router = createBrowserRouter([
+  { path: '/', element: <HomePage /> },
+  { path: '/create-project', element: <CreateProjectPage /> },
+  { path: '/manage-projects', element: <ManageProjectsPage /> },
+  { path: '/profile', element: <ProfilePage /> },
+  { path: '/project/:id', element: <ProjectPage /> },
+  { path: '*', element: <Navigate to="/" replace /> },
+])
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <App />
+    <ThemeProvider>
+      <AuthProvider>
+        <SearchProvider>
+          <RouterProvider router={router} />
+        </SearchProvider>
+      </AuthProvider>
+    </ThemeProvider>
   </StrictMode>,
 )

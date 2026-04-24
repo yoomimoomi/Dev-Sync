@@ -1,0 +1,206 @@
+"use client"
+
+import { useState } from "react"
+import { MessageCircle, Reply, Send } from "lucide-react"
+import { Avatar, AvatarFallback } from "@/components/ui/avatar"
+import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Textarea } from "@/components/ui/textarea"
+import { useAuth } from "@/lib/auth-context"
+import type { Comment } from "@/lib/mock-data"
+
+interface CommentSectionProps {
+  projectId: string
+  initialComments: Comment[]
+}
+
+function CommentItem({ 
+  comment, 
+  onReply,
+  isAuthenticated 
+}: { 
+  comment: Comment
+  onReply: (commentId: string, content: string) => void
+  isAuthenticated: boolean
+}) {
+  const [showReplyForm, setShowReplyForm] = useState(false)
+  const [replyContent, setReplyContent] = useState("")
+
+  const handleSubmitReply = () => {
+    if (replyContent.trim()) {
+      onReply(comment.id, replyContent)
+      setReplyContent("")
+      setShowReplyForm(false)
+    }
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="flex gap-3">
+        <Avatar className="h-8 w-8 flex-shrink-0">
+          <AvatarFallback className="bg-secondary text-secondary-foreground text-xs">
+            {comment.author.name.slice(0, 2).toUpperCase()}
+          </AvatarFallback>
+        </Avatar>
+        <div className="flex-1 space-y-1">
+          <div className="flex items-center gap-2">
+            <span className="font-medium text-sm">{comment.author.name}</span>
+            <span className="text-xs text-muted-foreground">{comment.createdAt}</span>
+          </div>
+          <p className="text-sm text-foreground">{comment.content}</p>
+          {isAuthenticated && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground"
+              onClick={() => setShowReplyForm(!showReplyForm)}
+            >
+              <Reply className="h-3 w-3 mr-1" />
+              Reply
+            </Button>
+          )}
+        </div>
+      </div>
+
+      {showReplyForm && (
+        <div className="ml-11 flex gap-2">
+          <Textarea
+            placeholder="Write a reply..."
+            value={replyContent}
+            onChange={(e) => setReplyContent(e.target.value)}
+            className="min-h-[60px] text-sm"
+          />
+          <div className="flex flex-col gap-1">
+            <Button size="sm" onClick={handleSubmitReply} disabled={!replyContent.trim()}>
+              <Send className="h-3 w-3" />
+            </Button>
+            <Button size="sm" variant="ghost" onClick={() => setShowReplyForm(false)}>
+              Cancel
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {comment.replies && comment.replies.length > 0 && (
+        <div className="ml-11 space-y-3 border-l-2 border-border pl-4">
+          {comment.replies.map((reply) => (
+            <div key={reply.id} className="flex gap-3">
+              <Avatar className="h-6 w-6 flex-shrink-0">
+                <AvatarFallback className="bg-secondary text-secondary-foreground text-xs">
+                  {reply.author.name.slice(0, 2).toUpperCase()}
+                </AvatarFallback>
+              </Avatar>
+              <div className="flex-1 space-y-1">
+                <div className="flex items-center gap-2">
+                  <span className="font-medium text-sm">{reply.author.name}</span>
+                  <span className="text-xs text-muted-foreground">{reply.createdAt}</span>
+                </div>
+                <p className="text-sm text-foreground">{reply.content}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+export function CommentSection({ projectId, initialComments }: CommentSectionProps) {
+  const { isAuthenticated, user } = useAuth()
+  const [comments, setComments] = useState<Comment[]>(initialComments)
+  const [newComment, setNewComment] = useState("")
+
+  const handleAddComment = () => {
+    if (newComment.trim() && user) {
+      const comment: Comment = {
+        id: `new-${Date.now()}`,
+        projectId,
+        author: { name: user.name },
+        content: newComment,
+        createdAt: "Just now",
+      }
+      setComments([comment, ...comments])
+      setNewComment("")
+    }
+  }
+
+  const handleReply = (commentId: string, content: string) => {
+    if (!user) return
+    
+    setComments(comments.map(comment => {
+      if (comment.id === commentId) {
+        const newReply: Comment = {
+          id: `reply-${Date.now()}`,
+          projectId,
+          author: { name: user.name },
+          content,
+          createdAt: "Just now",
+        }
+        return {
+          ...comment,
+          replies: [...(comment.replies || []), newReply],
+        }
+      }
+      return comment
+    }))
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <MessageCircle className="h-5 w-5" />
+          Discussion ({comments.length})
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-6">
+        {isAuthenticated ? (
+          <div className="flex gap-3">
+            <Avatar className="h-8 w-8 flex-shrink-0">
+              <AvatarFallback className="bg-primary text-primary-foreground text-xs">
+                {user?.name.slice(0, 2).toUpperCase()}
+              </AvatarFallback>
+            </Avatar>
+            <div className="flex-1 space-y-2">
+              <Textarea
+                placeholder="Ask a question or share your thoughts..."
+                value={newComment}
+                onChange={(e) => setNewComment(e.target.value)}
+                className="min-h-[80px]"
+              />
+              <div className="flex justify-end">
+                <Button onClick={handleAddComment} disabled={!newComment.trim()}>
+                  <Send className="h-4 w-4 mr-2" />
+                  Post Comment
+                </Button>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="text-center py-4 bg-muted/50 rounded-lg">
+            <p className="text-sm text-muted-foreground">
+              Please log in to join the discussion
+            </p>
+          </div>
+        )}
+
+        <div className="space-y-6 pt-4 border-t">
+          {comments.length > 0 ? (
+            comments.map((comment) => (
+              <CommentItem
+                key={comment.id}
+                comment={comment}
+                onReply={handleReply}
+                isAuthenticated={isAuthenticated}
+              />
+            ))
+          ) : (
+            <p className="text-center text-sm text-muted-foreground py-4">
+              No comments yet. Be the first to start the discussion!
+            </p>
+          )}
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
