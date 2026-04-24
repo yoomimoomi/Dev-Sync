@@ -3,14 +3,12 @@ from random import randrange
 from fastapi import FastAPI, Depends, HTTPException, APIRouter
 from fastapi.security import OAuth2PasswordBearer
 from typing import Annotated
-from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
-from app.db.base import get_db, Base, DATABASE_URL
+from app.db.base import get_db, Base, engine
 from app.models.account import Account
 from app.schemas.account import AccountRead, AccountCreate
 
-engine = create_engine(DATABASE_URL)
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
 Base.metadata.create_all(bind=engine)
