@@ -4,7 +4,7 @@ from fastapi import FastAPI, Depends, HTTPException, APIRouter
 from fastapi.security import OAuth2PasswordBearer
 from typing import Annotated
 from sqlalchemy.orm import Session
-
+from pwdlib import PasswordHash
 from app.db.base import get_db, Base, engine
 from app.models.account import Account
 from app.schemas.account import AccountRead, AccountCreate
@@ -13,7 +13,7 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
 Base.metadata.create_all(bind=engine)
 app = FastAPI(title="Devsync")
-
+password_hash = PasswordHash.recommended()
 
 @app.get("/")
 async def root():
@@ -73,10 +73,16 @@ async def create_user(user_in: AccountCreate, db: Session = Depends(get_db)):
         grade=user_in.grade,
         roles=user_in.roles,
         technologies=user_in.technologies,
-        skills=user_in.skills
+        skills=user_in.skills,
+        password_hash= hash_pwd(user_in.password)
     )
     db.add(new_user)
     db.commit()
     db.refresh(new_user)
     return new_user
 
+def hash_pwd(pwd: str):
+    return password_hash.hash(pwd)
+
+def verify_pwd(pwd: str, hashed_pw: str):
+    return password_hash.verify(pwd, hashed_pw)

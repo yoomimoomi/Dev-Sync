@@ -13,7 +13,7 @@ class Account(Base):
     )#Keys/Constraints from the Postgresql schema
 
     user_id: Mapped[str] = mapped_column(CHAR(10), primary_key=True)
-    password_hash: Mapped[Optional[str]] = mapped_column(String(15))
+    password_hash: Mapped[Optional[str]] = mapped_column(String(100))
     name: Mapped[Optional[str]] = mapped_column(String(50))#Should be changed to non-null
     email: Mapped[Optional[str]] = mapped_column(String(50))
     grade: Mapped[Optional[str]] = mapped_column(String(9))
