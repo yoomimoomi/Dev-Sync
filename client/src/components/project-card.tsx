@@ -1,0 +1,60 @@
+import { Link } from "react-router-dom"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { Badge } from "@/components/ui/badge"
+import { Card, CardContent } from "@/components/ui/card"
+
+export interface Project {
+  id: string
+  title: string
+  description: string
+  author: {
+    name: string
+    avatar?: string
+  }
+  datePosted: string
+  tags: string[]
+}
+
+interface ProjectCardProps {
+  project: Project
+}
+
+export function ProjectCard({ project }: ProjectCardProps) {
+  return (
+    <Link to={`/project/${project.id}`}>
+      <Card className="transition-all hover:shadow-lg hover:border-primary/50 cursor-pointer">
+        <CardContent className="p-6">
+          <div className="flex items-start justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <Avatar className="h-10 w-10">
+                <AvatarImage src={project.author.avatar} alt={project.author.name} />
+                <AvatarFallback className="bg-muted text-muted-foreground">
+                  {project.author.name.slice(0, 2).toUpperCase()}
+                </AvatarFallback>
+              </Avatar>
+              <div className="flex items-center gap-3 text-sm text-muted-foreground">
+                <span className="font-medium text-foreground">{project.author.name}</span>
+                <span>{project.datePosted}</span>
+              </div>
+            </div>
+            <div className="flex flex-wrap justify-end gap-1.5">
+              {project.tags.map((tag) => (
+                <Badge
+                  key={tag}
+                  variant="secondary"
+                  className="bg-secondary text-secondary-foreground text-xs"
+                >
+                  {tag}
+                </Badge>
+              ))}
+            </div>
+          </div>
+          <div className="mt-4">
+            <h3 className="text-lg font-semibold text-foreground">{project.title}</h3>
+            <p className="mt-1 text-sm text-muted-foreground line-clamp-2">{project.description}</p>
+          </div>
+        </CardContent>
+      </Card>
+    </Link>
+  )
+}

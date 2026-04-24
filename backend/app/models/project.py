@@ -3,6 +3,9 @@ from typing import Optional
 
 from sqlalchemy import String, ForeignKeyConstraint, PrimaryKeyConstraint, Text, DateTime, text
 from sqlalchemy.dialects.postgresql import ARRAY
+from app.models.account import Account
+from app.models.application import Application
+from app.models.comment import Comment
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
