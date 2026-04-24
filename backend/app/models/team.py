@@ -2,6 +2,10 @@ from typing import Optional
 
 from sqlalchemy import CHAR, ForeignKey
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+from app.models.account import Account
+from app.models.project import Project
+from app.models.account_team import AccountTeam
+from app.models.message import Message
 
 from app.db.base import Base
 

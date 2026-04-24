@@ -12,3 +12,4 @@ router = APIRouter(
 async def create_user(user: signup):
     db.append(user)
     return {"message": "user recorded successfully"}
+
