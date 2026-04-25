@@ -1,20 +1,59 @@
 import app.models
 from random import randrange
-from fastapi import FastAPI, Depends, HTTPException, APIRouter
+from fastapi import FastAPI, Depends, HTTPException, APIRouter  # type: ignore
 from fastapi.security import OAuth2PasswordBearer
 from typing import Annotated
 from sqlalchemy import create_engine
-from sqlalchemy.orm import Session
-
+from sqlalchemy.orm import Session,sessionmaker,declarative_base
+from app.post_schemas import pagepost
 from app.db.base import get_db, Base, DATABASE_URL
 from app.models.account import Account
 from app.schemas.account import AccountRead, AccountCreate
+from fastapi.middleware.cors import CORSMiddleware
+# in another backend file
+from app.db.base import USER, PASSWORD, HOST, PORT, DBNAME, DATABASE_URL
+
+from app.routes import router
+from app.models.project import Project
+
+DATABASE_URL = f"postgresql+psycopg2://{USER}:{PASSWORD}@{HOST}:{PORT}/{DBNAME}"
+
+app = FastAPI(title="Devsync")
+app.include_router(router)
+origins = [
+    "http://localhost:5173",   # Vite dev server
+    "http://127.0.0.1:5173",
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,      # or ["*"] for quick local testing only
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 engine = create_engine(DATABASE_URL)
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+Base = declarative_base()
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
 Base.metadata.create_all(bind=engine)
 app = FastAPI(title="Devsync")
+
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+        db.commit()
+    except:
+        db.rollback()
+        raise
+    finally:
+        db.close()
+
+db = get_db()
+
 
 
 @app.get("/")
@@ -51,10 +90,11 @@ def get_current_user(token: Annotated[str, Depends(oauth2_scheme)]):
     user = fake_decode_token(token)
     return user
 
-
-@app.get("/user/me")
-async def get_user(current_user: Annotated[AccountRead, Depends(get_current_user)]):
-    return current_user
+#lets test this
+@app.get("/projects/{title}", response_model=pagepost)
+async def get_project(title: str,db: Session = Depends(get_db)):
+    post = db.query(Project).filter(Project.title == title).first()
+    return post
 
 
 @app.get("/users/{user_id}", response_model=AccountRead)

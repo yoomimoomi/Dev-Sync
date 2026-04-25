@@ -1,18 +1,36 @@
-import { useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Navbar } from '@/components/navbar'
 import { FilterSidebar } from '@/components/filter-sidebar'
-import { ProjectCard } from '@/components/project-card'
-import { mockProjects } from '@/lib/mock-data'
+import { ProjectCard, type Project} from '@/components/project-card'
+
 import { useSearch } from '@/lib/search-context'
 
 export function HomePage() {
   const { searchQuery } = useSearch()
+  const [projects, setProjects] = useState<Project[]>([])
+
+  useEffect(() => {
+    const fetchProjects = async () => {
+      try {
+        // Replace with your real backend endpoint
+        const response = await fetch('http://127.0.0.1:8000/projects')
+        if (!response.ok) throw new Error('Failed to fetch projects')
+        const data: Project[] = await response.json()
+        setProjects(data)
+      } catch (error) {
+        console.error('Error fetching projects:', error)
+      }
+    }
+    fetchProjects()
+  }, [])
+
+
 
   const filteredProjects = useMemo(() => {
-    if (!searchQuery.trim()) return mockProjects
+    if (!searchQuery.trim()) return projects
 
     const query = searchQuery.toLowerCase()
-    return mockProjects.filter(
+    return projects.filter(
       (project) =>
         project.title.toLowerCase().includes(query) ||
         project.description.toLowerCase().includes(query) ||
