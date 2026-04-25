@@ -2,6 +2,7 @@ import datetime
 from typing import Optional
 
 from sqlalchemy import String, ForeignKeyConstraint, PrimaryKeyConstraint, Text, DateTime, text
+from sqlalchemy.ext.mutable import MutableList
 from sqlalchemy.dialects.postgresql import ARRAY
 from app.models.account import Account
 from app.models.application import Application
@@ -22,9 +23,9 @@ class Project(Base):
     description: Mapped[Optional[str]] = mapped_column(Text)
     status: Mapped[Optional[str]] = mapped_column(String(6))
     grade: Mapped[Optional[str]] = mapped_column(String(10))
-    roles: Mapped[Optional[list[str]]] = mapped_column(ARRAY(String(length=20)))
-    skills: Mapped[Optional[list[str]]] = mapped_column(ARRAY(String(length=20)))
-    technologies: Mapped[Optional[list[str]]] = mapped_column(ARRAY(String(length=20)))
+    roles: Mapped[Optional[list[str]]] = mapped_column(MutableList.as_mutable(ARRAY(String(length=20))))
+    skills: Mapped[Optional[list[str]]] = mapped_column(MutableList.as_mutable(ARRAY(String(length=20))))
+    technologies: Mapped[Optional[list[str]]] = mapped_column(MutableList.as_mutable(ARRAY(String(length=20))))
     created_at: Mapped[Optional[datetime.datetime]] = mapped_column(DateTime, server_default=text('CURRENT_TIMESTAMP'))
 
     owner: Mapped[Optional['Account']] = relationship('Account', back_populates='projects')

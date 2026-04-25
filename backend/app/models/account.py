@@ -2,6 +2,7 @@ from typing import Optional
 
 from sqlalchemy import String, PrimaryKeyConstraint, UniqueConstraint, CHAR
 from sqlalchemy.dialects.postgresql import ARRAY
+from sqlalchemy.ext.mutable import MutableList
 from sqlalchemy.orm import relationship, Mapped, mapped_column
 from app.db.base import Base
 
@@ -17,9 +18,9 @@ class Account(Base):
     name: Mapped[Optional[str]] = mapped_column(String(50))#Should be changed to non-null
     email: Mapped[Optional[str]] = mapped_column(String(50))
     grade: Mapped[Optional[str]] = mapped_column(String(9))
-    roles: Mapped[Optional[list[str]]] = mapped_column(ARRAY(String(length=20)))
-    skills: Mapped[Optional[list[str]]] = mapped_column(ARRAY(String(length=20)))
-    technologies: Mapped[Optional[list[str]]] = mapped_column(ARRAY(String(length=20)))
+    roles: Mapped[Optional[list[str]]] = mapped_column(MutableList.as_mutable(ARRAY(String(length=20))))
+    skills: Mapped[Optional[list[str]]] = mapped_column(MutableList.as_mutable(ARRAY(String(length=20))))
+    technologies: Mapped[Optional[list[str]]] = mapped_column(MutableList.as_mutable(ARRAY(String(length=20))))
 
     projects: Mapped[list['Project']] = relationship('Project', back_populates='owner')
     joined_teams: Mapped[list['Team']] = relationship(
