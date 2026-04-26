@@ -26,12 +26,14 @@ import { useTheme } from "@/lib/theme-context"
 export function Navbar() {
   const { pathname } = useLocation()
   const navigate = useNavigate()
-  const { user, isAuthenticated, login, logout } = useAuth()
+  const { user, isAuthenticated, login, register, logout } = useAuth()
   const { searchQuery, setSearchQuery } = useSearch()
   const { theme, toggleTheme } = useTheme()
   const [mounted, setMounted] = useState(false)
   const [showSearch, setShowSearch] = useState(false)
   const [showLoginDialog, setShowLoginDialog] = useState(false)
+  const [authMode, setAuthMode] = useState<"login" | "register">("login")
+  const [name, setName] = useState("")
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [loginError, setLoginError] = useState("")
@@ -55,13 +57,16 @@ export function Navbar() {
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoginError("")
-    const success = await login(email, password)
-    if (success) {
+    const result =
+      authMode === "login" ? await login(email, password) : await register(name, email, password)
+    if (result.success) {
       setShowLoginDialog(false)
+      setAuthMode("login")
+      setName("")
       setEmail("")
       setPassword("")
     } else {
-      setLoginError("Invalid credentials")
+      setLoginError(result.error ?? "Authentication failed")
     }
   }
 
@@ -203,15 +208,70 @@ export function Navbar() {
         </div>
       </header>
 
-      <Dialog open={showLoginDialog} onOpenChange={setShowLoginDialog}>
+      <Dialog
+        open={showLoginDialog}
+        onOpenChange={(open) => {
+          setShowLoginDialog(open)
+          if (!open) {
+            setAuthMode("login")
+            setLoginError("")
+            setName("")
+            setEmail("")
+            setPassword("")
+          }
+        }}
+      >
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Log in to DevSync</DialogTitle>
+            <DialogTitle>
+              {authMode === "login" ? "Log in to DevSync" : "Create your DevSync account"}
+            </DialogTitle>
             <DialogDescription>
-              Enter your credentials to access your account
+              {authMode === "login"
+                ? "Enter your credentials to access your account"
+                : "Enter your details to get started"}
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleLogin} className="space-y-4">
+            <div className="grid grid-cols-2 gap-2">
+              <Button
+                type="button"
+                variant={authMode === "login" ? "default" : "outline"}
+                onClick={() => {
+                  setAuthMode("login")
+                  setLoginError("")
+                }}
+              >
+                Log in
+              </Button>
+              <Button
+                type="button"
+                variant={authMode === "register" ? "default" : "outline"}
+                onClick={() => {
+                  setAuthMode("register")
+                  setLoginError("")
+                }}
+              >
+                Register
+              </Button>
+            </div>
+
+            {authMode === "register" && (
+              <div className="space-y-2">
+                <label htmlFor="name" className="text-sm font-medium">
+                  Name
+                </label>
+                <Input
+                  id="name"
+                  type="text"
+                  placeholder="Your name"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  required
+                />
+              </div>
+            )}
+
             <div className="space-y-2">
               <label htmlFor="email" className="text-sm font-medium">
                 Email
@@ -242,7 +302,7 @@ export function Navbar() {
               <p className="text-sm text-destructive">{loginError}</p>
             )}
             <Button type="submit" className="w-full">
-              Log in
+              {authMode === "login" ? "Log in" : "Create account"}
             </Button>
           </form>
         </DialogContent>
