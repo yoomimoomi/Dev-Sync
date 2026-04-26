@@ -12,12 +12,15 @@ from jwt.exceptions import InvalidTokenError
 from pydantic import BaseModel
 from pwdlib import PasswordHash
 from pwdlib.exceptions import UnknownHashError
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from app.db.base import Base, engine, get_db
 from app.models.account import Account
+from app.models.application import Application
+from app.models.comment import Comment
 from app.routes import router
 from app.schemas.account import AccountCreate, AccountRead
+from app.schemas.projects import ProjectRead
 
 
 ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "30"))
@@ -198,7 +201,15 @@ async def create_user(user_in: AccountCreate, db: Session = Depends(get_db)):
     return new_user
 
 
-@app.get("/projects")
+@app.get("/projects", response_model=list[ProjectRead])
 async def get_projects(db: Session = Depends(get_db)):
-    projects = db.query(Project).all()
+    projects = (
+        db.query(Project)
+        .options(
+            selectinload(Project.owner),
+            selectinload(Project.applications).selectinload(Application.user),
+            selectinload(Project.comments).selectinload(Comment.user),
+        )
+        .all()
+    )
     return projects

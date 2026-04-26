@@ -1,13 +1,37 @@
-from pydantic import BaseModel, ConfigDict
+from datetime import datetime
+from typing import Any, Optional
+
+from pydantic import BaseModel, ConfigDict, field_validator
 
 from app.schemas.account import AccountRead
 
 
+def _coerce_none_to_list(v: Any) -> list:
+    return v if v is not None else []
+
+
 class ProjectBase(BaseModel):
     model_config = ConfigDict(from_attributes=True)
+
     project_id: str
-    title: str
-    status: str
+    user_id: Optional[str] = None
+    title: Optional[str] = None
+    description: Optional[str] = None
+    status: Optional[str] = None
+    grade: Optional[str] = None
+    roles: list[str] = []
+    skills: list[str] = []
+    technologies: list[str] = []
+
+    @field_validator("roles", "skills", "technologies", mode="before")
+    @classmethod
+    def array_columns_none_to_list(cls, v: Any) -> list:
+        return _coerce_none_to_list(v)
+    created_at: Optional[datetime] = None
+    owner_name: Optional[str] = None
+
 
 class ProjectRead(ProjectBase):
-    owner: AccountRead
+    owner: Optional[AccountRead] = None
+    applicant_user_names: list[Optional[str]] = []
+    commenter_names: list[Optional[str]] = []
