@@ -1,6 +1,7 @@
 import datetime
 from typing import Optional
-
+from app.models.project import Project
+from app.models.account import Account
 from sqlalchemy import DateTime, ForeignKeyConstraint, PrimaryKeyConstraint, CHAR, Text, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 

@@ -128,3 +128,5 @@ def hash_pwd(pwd: str):
 
 def verify_pwd(pwd: str, hashed_pw: str):
     return password_hash.verify(pwd, hashed_pw)
+
+

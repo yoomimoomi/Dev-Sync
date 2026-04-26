@@ -1,10 +1,18 @@
 from typing import Optional
-
+from sqlalchemy import String, PrimaryKeyConstraint, UniqueConstraint, CHAR, DateTime, Text,text
 from sqlalchemy import String, PrimaryKeyConstraint, UniqueConstraint, CHAR
 from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.orm import relationship, Mapped, mapped_column
 from app.db.base import Base
-
+from datetime import datetime
+from app.models.project import Project
+from app.models.team import Team
+from app.models.application import Application
+from app.models.comment import Comment
+from app.models.message import Message
+from app.models.account_team import AccountTeam
+from app.models.message import Message
+from app.models.message import Message
 class Account(Base):
     __tablename__ = 'accounts'
     __table_args__ = (
@@ -13,13 +21,19 @@ class Account(Base):
     )#Keys/Constraints from the Postgresql schema
 
     user_id: Mapped[str] = mapped_column(CHAR(10), primary_key=True)
-    password_hash: Mapped[Optional[str]] = mapped_column(String(100))
+    password_hash: Mapped[Optional[str]] = mapped_column(Text())
     name: Mapped[Optional[str]] = mapped_column(String(50))#Should be changed to non-null
     email: Mapped[Optional[str]] = mapped_column(String(50))
     grade: Mapped[Optional[str]] = mapped_column(String(9))
     roles: Mapped[Optional[list[str]]] = mapped_column(ARRAY(String(length=20)))
     skills: Mapped[Optional[list[str]]] = mapped_column(ARRAY(String(length=20)))
     technologies: Mapped[Optional[list[str]]] = mapped_column(ARRAY(String(length=20)))
+    major: Mapped[Optional[str]] = mapped_column(Text())
+    school: Mapped[Optional[str]] = mapped_column(Text())
+    date: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), server_default=text('CURRENT_TIMESTAMP'))
+    interests: Mapped[Optional[list[str]]] = mapped_column(ARRAY(Text()))
+    github: Mapped[Optional[str]] = mapped_column(Text())
+    linkedin: Mapped[Optional[str]] = mapped_column(Text())
 
     projects: Mapped[list['Project']] = relationship('Project', back_populates='owner')
     joined_teams: Mapped[list['Team']] = relationship(
@@ -30,3 +44,6 @@ class Account(Base):
     applications: Mapped[list['Application']] = relationship('Application', back_populates='user')
     comments: Mapped[list['Comment']] = relationship('Comment', back_populates='user')
     messages: Mapped[list['Message']] = relationship('Message', back_populates='user')
+
+
+
