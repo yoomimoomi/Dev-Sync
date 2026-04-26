@@ -13,6 +13,7 @@ interface AuthContextType {
   user: User | null
   isAuthenticated: boolean
   login: (email: string, password: string) => Promise<boolean>
+  register: (name: string, email: string, password: string) => Promise<boolean>
   logout: () => void
 }
 
@@ -35,6 +36,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return false
   }, [])
 
+  const register = useCallback(
+    async (name: string, email: string, password: string): Promise<boolean> => {
+      // Mock registration - in production, this would call an API
+      if (name && email && password) {
+        setUser({
+          id: "1",
+          name,
+          email,
+          avatar: undefined,
+        })
+        return true
+      }
+      return false
+    },
+    []
+  )
+
   const logout = useCallback(() => {
     setUser(null)
   }, [])
@@ -45,6 +63,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         user,
         isAuthenticated: !!user,
         login,
+        register,
         logout,
       }}
     >
