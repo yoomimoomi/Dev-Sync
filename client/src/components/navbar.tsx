@@ -57,16 +57,16 @@ export function Navbar() {
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoginError("")
-    const success =
+    const result =
       authMode === "login" ? await login(email, password) : await register(name, email, password)
-    if (success) {
+    if (result.success) {
       setShowLoginDialog(false)
       setAuthMode("login")
       setName("")
       setEmail("")
       setPassword("")
     } else {
-      setLoginError(authMode === "login" ? "Invalid credentials" : "Unable to create account")
+      setLoginError(result.error ?? "Authentication failed")
     }
   }
 
