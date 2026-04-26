@@ -13,6 +13,7 @@ export function HomePage() {
     const fetchProjects = async () => {
       try {
         // Replace with your real backend endpoint
+        //http://127.0.0.1:8000/projects
         const response = await fetch('http://127.0.0.1:8000/projects')
         if (!response.ok) throw new Error('Failed to fetch projects')
         const data: Project[] = await response.json()

@@ -1,11 +1,14 @@
 import datetime
-from typing import Optional
-from app.models.project import Project
-from app.models.account import Account
+from typing import Optional, TYPE_CHECKING
+
 from sqlalchemy import DateTime, ForeignKeyConstraint, PrimaryKeyConstraint, CHAR, Text, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
+
+if TYPE_CHECKING:
+    from app.models.account import Account
+    from app.models.project import Project
 class Comment(Base):
     __tablename__ = 'comments'
     __table_args__ = (

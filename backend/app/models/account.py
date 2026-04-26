@@ -1,18 +1,17 @@
-from typing import Optional
-from sqlalchemy import String, PrimaryKeyConstraint, UniqueConstraint, CHAR, DateTime, Text,text
-from sqlalchemy import String, PrimaryKeyConstraint, UniqueConstraint, CHAR
+from typing import Optional, TYPE_CHECKING
+from datetime import datetime
+
+from sqlalchemy import String, PrimaryKeyConstraint, UniqueConstraint, CHAR, DateTime, Text, text
 from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.orm import relationship, Mapped, mapped_column
+
 from app.db.base import Base
-from datetime import datetime
-from app.models.project import Project
-from app.models.team import Team
-from app.models.application import Application
-from app.models.comment import Comment
-from app.models.message import Message
-from app.models.account_team import AccountTeam
-from app.models.message import Message
-from app.models.message import Message
+
+if TYPE_CHECKING:
+    from app.models.project import Project
+    from app.models.application import Application
+    from app.models.comment import Comment
+    from app.models.message import Message
 class Account(Base):
     __tablename__ = 'accounts'
     __table_args__ = (
@@ -36,11 +35,11 @@ class Account(Base):
     linkedin: Mapped[Optional[str]] = mapped_column(Text())
 
     projects: Mapped[list['Project']] = relationship('Project', back_populates='owner')
-    joined_teams: Mapped[list['Team']] = relationship(
-        'Team',
-        secondary='accountteams',
-        back_populates='members'
-    )
+    # joined_teams: Mapped[list['Team']] = relationship(
+    #     'Team',
+    #     secondary='accountteams',
+    #     back_populates='members'
+    # )
     applications: Mapped[list['Application']] = relationship('Application', back_populates='user')
     comments: Mapped[list['Comment']] = relationship('Comment', back_populates='user')
     messages: Mapped[list['Message']] = relationship('Message', back_populates='user')

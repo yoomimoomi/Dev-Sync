@@ -1,14 +1,16 @@
 import datetime
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
 
 from sqlalchemy import String, ForeignKeyConstraint, PrimaryKeyConstraint, Text, DateTime, text
 from sqlalchemy.dialects.postgresql import ARRAY
-from app.models.account import Account
-from app.models.application import Application
-from app.models.comment import Comment
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
+
+if TYPE_CHECKING:
+    from app.models.account import Account
+    from app.models.application import Application
+    from app.models.comment import Comment
 class Project(Base):
     __tablename__ = 'projects'
     __table_args__ = (

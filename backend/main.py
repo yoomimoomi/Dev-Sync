@@ -2,8 +2,8 @@ import os
 from datetime import datetime, timedelta, timezone
 from random import randrange
 from typing import Annotated
+from app.models.project import Project
 
-import app.models
 import jwt
 from fastapi import Depends, FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
@@ -198,3 +198,7 @@ async def create_user(user_in: AccountCreate, db: Session = Depends(get_db)):
     return new_user
 
 
+@app.get("/projects")
+async def get_projects(db: Session = Depends(get_db)):
+    projects = db.query(Project).all()
+    return projects

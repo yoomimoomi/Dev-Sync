@@ -1,11 +1,14 @@
 import datetime
-from typing import Optional
-from app.models.account import Account
-from app.models.team import Team
+from typing import Optional, TYPE_CHECKING
+
 from sqlalchemy import ForeignKeyConstraint, PrimaryKeyConstraint, CHAR, Text, DateTime, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
+
+if TYPE_CHECKING:
+    from app.models.account import Account
+    from app.models.team import Team
 
 
 class Message(Base):

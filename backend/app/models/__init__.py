@@ -1,7 +1,17 @@
 from .account import Account
-from .account_team import AccountTeam
 from .application import Application
 from .comment import Comment
 from .message import Message
+from .notifcation import Notification
 from .project import Project
 from .team import Team
+
+__all__ = [
+    "Account",
+    "Application",
+    "Comment",
+    "Message",
+    "Notification",
+    "Project",
+    "Team",
+]

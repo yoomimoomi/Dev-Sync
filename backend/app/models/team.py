@@ -1,13 +1,14 @@
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
 
 from sqlalchemy import CHAR, ForeignKey
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from app.models.account import Account
-from app.models.project import Project
-from app.models.account_team import AccountTeam
-from app.models.message import Message
 
 from app.db.base import Base
+
+if TYPE_CHECKING:
+    from app.models.account import Account
+    from app.models.project import Project
+    from app.models.message import Message
 
 class Team(Base):
     __tablename__ = 'teams'
@@ -24,9 +25,9 @@ class Team(Base):
 
     project: Mapped["Project"] = relationship("Project")
     owner: Mapped[Optional["Account"]] = relationship("Account")
-    members: Mapped[list["Account"]] = relationship(
-        "Account",
-        secondary="accountteams",
-        back_populates="joined_teams"
-    )
+    # members: Mapped[list["Account"]] = relationship(
+    #     "Account",
+    #     secondary="accountteams",
+    #     back_populates="joined_teams"
+    # )
     messages: Mapped[list["Message"]] = relationship("Message")
