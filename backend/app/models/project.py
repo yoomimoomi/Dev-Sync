@@ -5,7 +5,7 @@ from sqlalchemy import String, ForeignKeyConstraint, PrimaryKeyConstraint, Text,
 from sqlalchemy.ext.mutable import MutableList
 from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-
+from sqlalchemy.ext.associationproxy import association_proxy, AssociationProxy
 from app.db.base import Base
 
 if TYPE_CHECKING:
@@ -31,5 +31,14 @@ class Project(Base):
     created_at: Mapped[Optional[datetime.datetime]] = mapped_column(DateTime, server_default=text('CURRENT_TIMESTAMP'))
 
     owner: Mapped[Optional['Account']] = relationship('Account', back_populates='projects')
+    owner_name: AssociationProxy[Optional[str]] = association_proxy('owner', 'name')
     applications: Mapped[list['Application']] = relationship('Application', back_populates='project')
     comments: Mapped[list['Comment']] = relationship('Comment', back_populates='project')
+
+    @property
+    def applicant_user_names(self) -> list[Optional[str]]:
+        return [a.user.name for a in self.applications]
+
+    @property
+    def commenter_names(self) -> list[Optional[str]]:
+        return [c.user.name for c in self.comments]
