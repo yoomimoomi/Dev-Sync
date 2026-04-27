@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { Plus, Settings, Trash2, Eye, Users } from 'lucide-react'
 import { Navbar } from '@/components/navbar'
+import { type Project } from '@/components/project-card'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -13,13 +14,27 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { myProjects } from '@/lib/mock-data'
 
 export function ManageProjectsPage() {
   const [mounted, setMounted] = useState(false)
+  const [projects, setProjects] = useState<Project[]>([])
 
   useEffect(() => {
     setMounted(true)
+  }, [])
+
+  useEffect(() => {
+    const fetchProjects = async () => {
+      try {
+        const response = await fetch('http://127.0.0.1:8000/projects')
+        if (!response.ok) throw new Error('Failed to fetch projects')
+        const data: Project[] = await response.json()
+        setProjects(data)
+      } catch (error) {
+        console.error('Error fetching projects:', error)
+      }
+    }
+    fetchProjects()
   }, [])
 
   return (
@@ -39,7 +54,7 @@ export function ManageProjectsPage() {
           </Button>
         </div>
 
-        {myProjects.length === 0 ? (
+        {projects.length === 0 ? (
           <Card className="py-12 text-center">
             <CardContent>
               <div className="mb-4 text-muted-foreground">You haven&apos;t created any projects yet</div>
@@ -50,27 +65,27 @@ export function ManageProjectsPage() {
           </Card>
         ) : (
           <div className="space-y-4">
-            {myProjects.map((project) => (
-              <Card key={project.id} className="transition-all hover:shadow-md">
+            {projects.map((project) => (
+              <Card key={project.project_id} className="transition-all hover:shadow-md">
                 <CardHeader className="pb-3">
                   <div className="flex items-start justify-between">
                     <div className="flex items-center gap-4">
                       <Avatar className="h-10 w-10">
-                        <AvatarImage src="" alt={project.author.name} />
+                        <AvatarImage src="" alt={project.owner.name} />
                         <AvatarFallback className="bg-primary text-primary-foreground">
-                          {project.author.name.slice(0, 2).toUpperCase()}
+                          {project.owner.name.slice(0, 2).toUpperCase()}
                         </AvatarFallback>
                       </Avatar>
                       <div>
                         <CardTitle className="text-lg">
                           <Link
-                            to={`/project/${project.id}`}
+                            to={`/project/${project.project_id}`}
                             className="transition-colors hover:text-primary"
                           >
                             {project.title}
                           </Link>
                         </CardTitle>
-                        <p className="text-sm text-muted-foreground">Created on {project.datePosted}</p>
+                        <p className="text-sm text-muted-foreground">Created on {project.created_at}</p>
                       </div>
                     </div>
                     {mounted ? (
@@ -83,7 +98,7 @@ export function ManageProjectsPage() {
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
                           <DropdownMenuItem asChild>
-                            <Link to={`/project/${project.id}`}>
+                            <Link to={`/project/${project.project_id}`}>
                               <Eye className="mr-2 h-4 w-4" />
                               View Project
                             </Link>
@@ -115,14 +130,14 @@ export function ManageProjectsPage() {
                   <p className="mb-4 line-clamp-2 text-sm text-muted-foreground">{project.description}</p>
                   <div className="flex items-center justify-between">
                     <div className="flex flex-wrap gap-1.5">
-                      {project.tags.slice(0, 4).map((tag) => (
+                      {[...project.roles, ...project.skills, ...project.technologies].slice(0, 4).map((tag) => (
                         <Badge key={tag} variant="secondary" className="text-xs">
                           {tag}
                         </Badge>
                       ))}
-                      {project.tags.length > 4 && (
+                      {project.roles.length + project.skills.length + project.technologies.length > 4 && (
                         <Badge variant="outline" className="text-xs">
-                          +{project.tags.length - 4} more
+                          +{project.roles.length + project.skills.length + project.technologies.length - 4} more
                         </Badge>
                       )}
                     </div>

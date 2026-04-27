@@ -4,15 +4,18 @@ import { Badge } from "@/components/ui/badge"
 import { Card, CardContent } from "@/components/ui/card"
 
 export interface Project {
-  id: string
+  project_id: string
+  owner: {
+    name: string
+  }
   title: string
   description: string
-  author: {
-    name: string
-    avatar?: string
-  }
-  datePosted: string
-  tags: string[]
+  status: string
+  grade: string
+  roles: string[]
+  skills: string[]
+  technologies: string[]
+  created_at: string
 }
 
 interface ProjectCardProps {
@@ -20,25 +23,27 @@ interface ProjectCardProps {
 }
 
 export function ProjectCard({ project }: ProjectCardProps) {
+  const tags = [...project.roles, ...project.skills, ...project.technologies]
+
   return (
-    <Link to={`/project/${project.id}`}>
+    <Link to={`/project/${project.project_id}`}>
       <Card className="transition-all hover:shadow-lg hover:border-primary/50 cursor-pointer">
         <CardContent className="p-6">
           <div className="flex items-start justify-between gap-4">
             <div className="flex items-center gap-3">
               <Avatar className="h-10 w-10">
-                <AvatarImage src={project.author.avatar} alt={project.author.name} />
+                <AvatarImage src="" alt={project.owner.name} />
                 <AvatarFallback className="bg-muted text-muted-foreground">
-                  {project.author.name.slice(0, 2).toUpperCase()}
+                  {project.owner.name.slice(0, 2).toUpperCase()}
                 </AvatarFallback>
               </Avatar>
               <div className="flex items-center gap-3 text-sm text-muted-foreground">
-                <span className="font-medium text-foreground">{project.author.name}</span>
-                <span>{project.datePosted}</span>
+                <span className="font-medium text-foreground">{project.owner.name}</span>
+                <span>{project.created_at}</span>
               </div>
             </div>
             <div className="flex flex-wrap justify-end gap-1.5">
-              {project.tags.map((tag) => (
+              {tags.map((tag) => (
                 <Badge
                   key={tag}
                   variant="secondary"
