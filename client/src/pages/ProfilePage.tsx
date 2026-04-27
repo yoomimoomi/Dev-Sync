@@ -1,9 +1,9 @@
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Navbar } from '@/components/navbar'
-import { ProjectCard } from '@/components/project-card'
+import { ProjectCard, type Project } from '@/components/project-card'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { myProjects } from '@/lib/mock-data'
 import { Mail, MapPin, Link as LinkIcon, Calendar, Edit, Github, Linkedin } from 'lucide-react'
 
 const userProfile = {
@@ -33,6 +33,22 @@ const userProfile = {
 }
 
 export function ProfilePage() {
+  const [projects, setProjects] = useState<Project[]>([])
+
+  useEffect(() => {
+    const fetchProjects = async () => {
+      try {
+        const response = await fetch('http://127.0.0.1:8000/projects')
+        if (!response.ok) throw new Error('Failed to fetch projects')
+        const data: Project[] = await response.json()
+        setProjects(data)
+      } catch (error) {
+        console.error('Error fetching projects:', error)
+      }
+    }
+    fetchProjects()
+  }, [])
+
   return (
     <div className="min-h-screen bg-background">
       <Navbar />
@@ -146,12 +162,12 @@ export function ProfilePage() {
             </div>
 
             <div className="space-y-4">
-              {myProjects.map((project) => (
-                <ProjectCard key={project.id} project={project} />
-              ))}
+                {projects.map((project) => (
+                  <ProjectCard key={project.project_id} project={project} />
+                ))}
             </div>
 
-            {myProjects.length === 0 && (
+            {projects.length === 0 && (
               <Card>
                 <CardContent className="py-12 text-center">
                   <p className="text-muted-foreground">You haven&apos;t created any projects yet.</p>

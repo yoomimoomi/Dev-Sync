@@ -31,14 +31,16 @@ export function HomePage() {
     if (!searchQuery.trim()) return projects
 
     const query = searchQuery.toLowerCase()
-    return projects.filter(
-      (project) =>
+    return projects.filter((project) => {
+      const tags = [...project.roles, ...project.skills, ...project.technologies]
+      return (
         project.title.toLowerCase().includes(query) ||
         project.description.toLowerCase().includes(query) ||
-        project.tags.some((tag) => tag.toLowerCase().includes(query)) ||
-        project.author.name.toLowerCase().includes(query),
-    )
-  }, [searchQuery])
+        tags.some((tag) => tag.toLowerCase().includes(query)) ||
+        project.owner.name.toLowerCase().includes(query)
+      )
+    })
+  }, [searchQuery, projects])
 
   return (
     <div className="min-h-screen bg-background">
@@ -55,7 +57,7 @@ export function HomePage() {
               </p>
             )}
             {filteredProjects.length > 0 ? (
-              filteredProjects.map((project) => <ProjectCard key={project.id} project={project} />)
+              filteredProjects.map((project) => <ProjectCard key={project.project_id} project={project} />)
             ) : (
               <div className="rounded-lg border border-dashed border-border p-12 text-center">
                 <p className="text-muted-foreground">No projects found matching your search.</p>

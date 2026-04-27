@@ -10,7 +10,7 @@ import { Button } from '@/components/ui/button'
 
 export function ProjectPage() {
   const { id = '' } = useParams()
-  const project = mockProjects.find((p) => p.id === id)
+  const project = mockProjects.find((p) => p.project_id === id)
 
   if (!project) {
     return (
@@ -46,7 +46,7 @@ export function ProjectPage() {
             <Card>
               <CardHeader>
                 <div className="mb-4 flex flex-wrap gap-2">
-                  {project.tags.map((tag) => (
+                  {[...project.roles, ...project.skills, ...project.technologies].map((tag) => (
                     <Badge key={tag} variant="secondary">
                       {tag}
                     </Badge>
@@ -91,13 +91,13 @@ export function ProjectPage() {
                 <div className="flex flex-wrap gap-4">
                   <div className="flex items-center gap-3">
                     <Avatar>
-                      <AvatarImage src="" alt={project.author.name} />
+                      <AvatarImage src="" alt={project.owner.name} />
                       <AvatarFallback className="bg-primary text-primary-foreground">
-                        {project.author.name.slice(0, 2).toUpperCase()}
+                        {project.owner.name.slice(0, 2).toUpperCase()}
                       </AvatarFallback>
                     </Avatar>
                     <div>
-                      <p className="text-sm font-medium">{project.author.name}</p>
+                      <p className="text-sm font-medium">{project.owner.name}</p>
                       <p className="text-xs text-muted-foreground">Project Lead</p>
                     </div>
                   </div>
@@ -115,7 +115,7 @@ export function ProjectPage() {
                   <div className="flex items-center gap-3 text-sm">
                     <Calendar className="h-4 w-4 text-muted-foreground" />
                     <span className="text-muted-foreground">Posted:</span>
-                    <span className="font-medium">{project.datePosted}</span>
+                    <span className="font-medium">{project.created_at}</span>
                   </div>
                   <div className="flex items-center gap-3 text-sm">
                     <Users className="h-4 w-4 text-muted-foreground" />
@@ -139,13 +139,13 @@ export function ProjectPage() {
               <CardContent>
                 <div className="flex items-center gap-3">
                   <Avatar className="h-12 w-12">
-                    <AvatarImage src="" alt={project.author.name} />
+                    <AvatarImage src="" alt={project.owner.name} />
                     <AvatarFallback className="bg-primary text-primary-foreground">
-                      {project.author.name.slice(0, 2).toUpperCase()}
+                      {project.owner.name.slice(0, 2).toUpperCase()}
                     </AvatarFallback>
                   </Avatar>
                   <div>
-                    <p className="font-medium">{project.author.name}</p>
+                    <p className="font-medium">{project.owner.name}</p>
                     <p className="text-sm text-muted-foreground">Computer Science, Senior</p>
                   </div>
                 </div>
