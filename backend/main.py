@@ -21,7 +21,7 @@ from app.models.comment import Comment
 from app.routes import router
 from app.schemas.account import AccountCreate, AccountRead
 from app.schemas.application import ApplicationCreate,ApplicationRead
-from app.schemas.projects import ProjectRead
+from app.schemas.projects import ProjectCreate, ProjectRead
 
 
 ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "30"))
@@ -215,9 +215,51 @@ async def get_projects(db: Session = Depends(get_db)):
     )
     return projects
 
+
+@app.get("/projects/{user_id}", response_model=list[ProjectRead])
+async def get_projects_by_user_id(user_id: str, db: Session = Depends(get_db)):
+    projects = (
+        db.query(Project).filter(Project.user_id == user_id).all()
+    )
+    return projects
+
+
+@app.post("/project", response_model=ProjectRead)
+async def create_project(project_in: ProjectCreate, current_user: Annotated[Account, Depends(get_current_user)], db: Session = Depends(get_db)):
+    new_project = Project(
+        project_id=f"P{randrange(100000000, 999999999)}",
+        user_id=current_user.user_id,
+        title=project_in.title,
+        description=project_in.description,
+        grade=project_in.grade,
+        roles=project_in.roles,
+        skills=project_in.skills,
+        technologies=project_in.technologies,
+        status="Open",
+    )
+    db.add(new_project)
+    db.commit()
+    
+    db.refresh(new_project)
+    return new_project
+
+
 @app.get("/applications/{user_id}", response_model=list[ApplicationRead])
 async def get_applications_by_user_id(user_id: str, db: Session = Depends(get_db)):
     applications = (
         db.query(Application).filter(Application.user_id == user_id).all()
     )
     return applications
+
+@app.post("/application", response_model=ApplicationRead)
+async def create_application(application_in: ApplicationCreate, current_user: Annotated[Account, Depends(get_current_user)], db: Session = Depends(get_db)):
+    new_application = Application(
+        user_id=current_user.user_id,
+        project_id=application_in.project_id,
+        status="Pending",
+        content=application_in.content,
+    )
+    db.add(new_application)
+    db.commit()
+    db.refresh(new_application)
+    return new_application
