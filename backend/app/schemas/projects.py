@@ -10,6 +10,14 @@ def _coerce_none_to_list(v: Any) -> list:
     return v if v is not None else []
 
 
+class ProjectCreate(BaseModel):
+    title: str
+    description: str
+    grade: str
+    roles: list[str] = []
+    skills: list[str] = []
+    technologies: list[str] = []
+
 class ProjectBase(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
