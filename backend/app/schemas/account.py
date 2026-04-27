@@ -9,9 +9,9 @@ class AccountCreate(BaseModel):
     email : EmailStr
     password: str = Field(..., min_length=8)
     grade: Optional[str] = Field(None, max_length=10)
-    roles: list[str] = Field(default_factory=list)
-    skills: list[str] = Field(default_factory=list)
-    technologies: list[str] = Field(default_factory=list)
+    roles : List[str] = []
+    skills : List[str] = []
+    technologies : List[str] = []
 
 
 
@@ -20,12 +20,12 @@ class AccountRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     user_id: str
-    name : str = Field( ..., max_length=50)
-    email: EmailStr
-    grade: Optional[str] = Field(None, max_length=10)
-    roles: list[str] = Field(default_factory=list)
-    skills: list[str] = Field(default_factory=list)
-    technologies: list[str] = Field(default_factory=list)
+    name: str
+    email: str
+    grade: str | None
+    roles: List[str] = []
+    skills: List[str] = []
+    technologies: List[str] = []
 
     @field_validator("roles", "skills", "technologies", mode="before")
     @classmethod
