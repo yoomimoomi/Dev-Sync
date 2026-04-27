@@ -20,6 +20,7 @@ from app.models.application import Application
 from app.models.comment import Comment
 from app.routes import router
 from app.schemas.account import AccountCreate, AccountRead
+from app.schemas.application import ApplicationCreate,ApplicationRead
 from app.schemas.projects import ProjectRead
 
 
@@ -213,3 +214,10 @@ async def get_projects(db: Session = Depends(get_db)):
         .all()
     )
     return projects
+
+@app.get("/applications/{user_id}", response_model=list[ApplicationRead])
+async def get_applications_by_user_id(user_id: str, db: Session = Depends(get_db)):
+    applications = (
+        db.query(Application).filter(Application.user_id == user_id).all()
+    )
+    return applications
