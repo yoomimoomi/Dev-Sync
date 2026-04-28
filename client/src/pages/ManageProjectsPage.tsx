@@ -15,9 +15,29 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 
+type JoinRequest = {
+  user_id: string
+  user_name: string
+  project_id: string
+  project_title: string
+  status: string
+  created_at: string
+}
+
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000'
+const TOKEN_STORAGE_KEY = 'devsync_access_token'
+
+function initials(name: string) {
+  const parts = name.trim().split(/\s+/).filter(Boolean)
+  const first = parts[0]?.[0] ?? ''
+  const second = parts.length > 1 ? parts[1]?.[0] ?? '' : parts[0]?.[1] ?? ''
+  return (first + second).toUpperCase() || '??'
+}
+
 export function ManageProjectsPage() {
   const [mounted, setMounted] = useState(false)
   const [projects, setProjects] = useState<Project[]>([])
+  const [joinRequests, setJoinRequests] = useState<JoinRequest[]>([])
 
   useEffect(() => {
     setMounted(true)
@@ -26,7 +46,10 @@ export function ManageProjectsPage() {
   useEffect(() => {
     const fetchProjects = async () => {
       try {
-        const response = await fetch('http://127.0.0.1:8000/projects')
+        const token = localStorage.getItem(TOKEN_STORAGE_KEY)
+        const response = await fetch(`${API_BASE_URL}/projects/me`, {
+          headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+        })
         if (!response.ok) throw new Error('Failed to fetch projects')
         const data: Project[] = await response.json()
         setProjects(data)
@@ -35,6 +58,24 @@ export function ManageProjectsPage() {
       }
     }
     fetchProjects()
+  }, [])
+
+  useEffect(() => {
+    const fetchJoinRequests = async () => {
+      try {
+        const token = localStorage.getItem(TOKEN_STORAGE_KEY)
+        if (!token) return
+        const response = await fetch(`${API_BASE_URL}/applications/my-projects`, {
+          headers: { Authorization: `Bearer ${token}` },
+        })
+        if (!response.ok) throw new Error('Failed to fetch join requests')
+        const data: JoinRequest[] = await response.json()
+        setJoinRequests(data)
+      } catch (error) {
+        console.error('Error fetching join requests:', error)
+      }
+    }
+    fetchJoinRequests()
   }, [])
 
   return (
@@ -144,7 +185,7 @@ export function ManageProjectsPage() {
                     <div className="flex items-center gap-4 text-sm text-muted-foreground">
                       <span className="flex items-center gap-1">
                         <Users className="h-4 w-4" />
-                        3 requests
+                        {project.applicant_user_names.length} request{project.applicant_user_names.length !== 1 ? 's' : ''}
                       </span>
                     </div>
                   </div>
@@ -160,44 +201,38 @@ export function ManageProjectsPage() {
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              <div className="flex items-center justify-between rounded-lg bg-muted/50 p-4">
-                <div className="flex items-center gap-3">
-                  <Avatar>
-                    <AvatarFallback>JD</AvatarFallback>
-                  </Avatar>
-                  <div>
-                    <p className="text-sm font-medium">John Doe</p>
-                    <p className="text-xs text-muted-foreground">
-                      Wants to join &quot;AI-Powered Study Assistant&quot;
-                    </p>
+              {joinRequests.length === 0 ? (
+                <div className="rounded-lg bg-muted/30 p-4 text-sm text-muted-foreground">
+                  No join requests yet.
+                </div>
+              ) : (
+                joinRequests.map((req) => (
+                  <div
+                    key={`${req.user_id}-${req.project_id}`}
+                    className="flex items-center justify-between rounded-lg bg-muted/50 p-4"
+                  >
+                    <div className="flex items-center gap-3">
+                      <Avatar>
+                        <AvatarFallback>{initials(req.user_name)}</AvatarFallback>
+                      </Avatar>
+                      <div>
+                        <p className="text-sm font-medium">{req.user_name}</p>
+                        <p className="text-xs text-muted-foreground">
+                          Wants to join &quot;{req.project_title}&quot;
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex gap-2">
+                      <Button size="sm" disabled>
+                        Accept
+                      </Button>
+                      <Button size="sm" variant="outline" disabled>
+                        Decline
+                      </Button>
+                    </div>
                   </div>
-                </div>
-                <div className="flex gap-2">
-                  <Button size="sm">Accept</Button>
-                  <Button size="sm" variant="outline">
-                    Decline
-                  </Button>
-                </div>
-              </div>
-              <div className="flex items-center justify-between rounded-lg bg-muted/50 p-4">
-                <div className="flex items-center gap-3">
-                  <Avatar>
-                    <AvatarFallback>AS</AvatarFallback>
-                  </Avatar>
-                  <div>
-                    <p className="text-sm font-medium">Alice Smith</p>
-                    <p className="text-xs text-muted-foreground">
-                      Wants to join &quot;Sustainable Campus Tracker&quot;
-                    </p>
-                  </div>
-                </div>
-                <div className="flex gap-2">
-                  <Button size="sm">Accept</Button>
-                  <Button size="sm" variant="outline">
-                    Decline
-                  </Button>
-                </div>
-              </div>
+                ))
+              )}
             </div>
           </CardContent>
         </Card>

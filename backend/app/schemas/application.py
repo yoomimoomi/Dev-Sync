@@ -28,6 +28,7 @@ class ProjectOwnerView(BaseModel):
     user_id: str = Field( ..., max_length=10)
     user_name: str = Field( ..., max_length=50)
     project_id: str = Field( ..., max_length=10)
+    project_title: str = Field(..., max_length=50)
     status: str = Field(...,max_length=6)
     created_at: datetime
     model_config = ConfigDict(from_attributes=True)

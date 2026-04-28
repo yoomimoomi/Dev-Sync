@@ -36,6 +36,9 @@ const suggestedTags = [
   'REST API',
 ]
 
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000'
+const TOKEN_STORAGE_KEY = 'devsync_access_token'
+
 export function CreateProjectPage() {
   const navigate = useNavigate()
   const [title, setTitle] = useState('')
@@ -45,6 +48,8 @@ export function CreateProjectPage() {
   const [teamSize, setTeamSize] = useState('')
   const [tags, setTags] = useState<string[]>([])
   const [tagInput, setTagInput] = useState('')
+  const [error, setError] = useState('')
+  const [isSubmitting, setIsSubmitting] = useState(false)
 
   const addTag = (tag: string) => {
     if (tag && !tags.includes(tag) && tags.length < 6) {
@@ -57,9 +62,51 @@ export function CreateProjectPage() {
     setTags(tags.filter((tag) => tag !== tagToRemove))
   }
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    navigate('/manage-projects')
+    setError('')
+
+    const token = localStorage.getItem(TOKEN_STORAGE_KEY)
+    if (!token) {
+      setError('You need to be logged in to create a project.')
+      return
+    }
+
+    if (!category || !skillLevel || !teamSize) {
+      setError('Please choose a category, skill level, and team size.')
+      return
+    }
+
+    setIsSubmitting(true)
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/project`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          title,
+          description,
+          grade: skillLevel,
+          roles: [category],
+          skills: [teamSize],
+          technologies: tags,
+        }),
+      })
+
+      if (!response.ok) {
+        const body = (await response.json().catch(() => null)) as { detail?: string } | null
+        throw new Error(body?.detail || 'Failed to create project')
+      }
+
+      navigate('/manage-projects')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to create project')
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   return (
@@ -81,6 +128,11 @@ export function CreateProjectPage() {
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-6">
+              {error ? (
+                <div className="rounded-md border border-destructive/20 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                  {error}
+                </div>
+              ) : null}
               <div className="space-y-2">
                 <Label htmlFor="title">Project Title</Label>
                 <Input
@@ -198,8 +250,8 @@ export function CreateProjectPage() {
               </div>
 
               <div className="flex gap-3 pt-4">
-                <Button type="submit" className="flex-1">
-                  Create Project
+                <Button type="submit" className="flex-1" disabled={isSubmitting}>
+                  {isSubmitting ? 'Creating...' : 'Create Project'}
                 </Button>
                 <Button type="button" variant="outline" asChild>
                   <Link to="/">Cancel</Link>

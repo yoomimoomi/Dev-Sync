@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { MessageCircle, Reply, Send } from "lucide-react"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
@@ -8,6 +8,19 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Textarea } from "@/components/ui/textarea"
 import { useAuth } from "@/lib/auth-context"
 import type { Comment } from "@/lib/mock-data"
+
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000"
+const TOKEN_STORAGE_KEY = "devsync_access_token"
+
+type ApiComment = {
+  user_id: string
+  project_id: string
+  content: string | null
+  created_at: string | null
+  user: {
+    name: string
+  } | null
+}
 
 interface CommentSectionProps {
   projectId: string
@@ -37,7 +50,7 @@ function CommentItem({
   return (
     <div className="space-y-3">
       <div className="flex gap-3">
-        <Avatar className="h-8 w-8 flex-shrink-0">
+        <Avatar className="h-8 w-8 shrink-0">
           <AvatarFallback className="bg-secondary text-secondary-foreground text-xs">
             {comment.author.name.slice(0, 2).toUpperCase()}
           </AvatarFallback>
@@ -85,7 +98,7 @@ function CommentItem({
         <div className="ml-11 space-y-3 border-l-2 border-border pl-4">
           {comment.replies.map((reply) => (
             <div key={reply.id} className="flex gap-3">
-              <Avatar className="h-6 w-6 flex-shrink-0">
+              <Avatar className="h-6 w-6 shrink-0">
                 <AvatarFallback className="bg-secondary text-secondary-foreground text-xs">
                   {reply.author.name.slice(0, 2).toUpperCase()}
                 </AvatarFallback>
@@ -109,18 +122,57 @@ export function CommentSection({ projectId, initialComments }: CommentSectionPro
   const { isAuthenticated, user } = useAuth()
   const [comments, setComments] = useState<Comment[]>(initialComments)
   const [newComment, setNewComment] = useState("")
+  const [isPosting, setIsPosting] = useState(false)
+  const [error, setError] = useState("")
 
-  const handleAddComment = () => {
-    if (newComment.trim() && user) {
-      const comment: Comment = {
-        id: `new-${Date.now()}`,
-        projectId,
-        author: { name: user.name },
-        content: newComment,
-        createdAt: "Just now",
+  useEffect(() => {
+    setComments(initialComments)
+  }, [initialComments])
+
+  const handleAddComment = async () => {
+    if (!newComment.trim() || !user) return
+
+    const token = localStorage.getItem(TOKEN_STORAGE_KEY)
+    if (!token) {
+      setError("You need to be logged in to post a comment.")
+      return
+    }
+
+    setIsPosting(true)
+    setError("")
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/comment`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          project_id: projectId,
+          content: newComment.trim(),
+        }),
+      })
+
+      if (!response.ok) {
+        const body = (await response.json().catch(() => null)) as { detail?: string } | null
+        throw new Error(body?.detail || "Failed to post comment")
       }
-      setComments([comment, ...comments])
+
+      const savedComment = (await response.json()) as ApiComment
+      const comment: Comment = {
+        id: `${savedComment.user_id}-${savedComment.project_id}`,
+        projectId: savedComment.project_id,
+        author: { name: savedComment.user?.name ?? user.name },
+        content: savedComment.content ?? "",
+        createdAt: savedComment.created_at ?? "Just now",
+      }
+      setComments((prev) => [comment, ...prev])
       setNewComment("")
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to post comment")
+    } finally {
+      setIsPosting(false)
     }
   }
 
@@ -156,7 +208,7 @@ export function CommentSection({ projectId, initialComments }: CommentSectionPro
       <CardContent className="space-y-6">
         {isAuthenticated ? (
           <div className="flex gap-3">
-            <Avatar className="h-8 w-8 flex-shrink-0">
+            <Avatar className="h-8 w-8 shrink-0">
               <AvatarFallback className="bg-primary text-primary-foreground text-xs">
                 {user?.name.slice(0, 2).toUpperCase()}
               </AvatarFallback>
@@ -168,10 +220,11 @@ export function CommentSection({ projectId, initialComments }: CommentSectionPro
                 onChange={(e) => setNewComment(e.target.value)}
                 className="min-h-[80px]"
               />
+              {error ? <p className="text-sm text-destructive">{error}</p> : null}
               <div className="flex justify-end">
-                <Button onClick={handleAddComment} disabled={!newComment.trim()}>
+                <Button onClick={handleAddComment} disabled={!newComment.trim() || isPosting}>
                   <Send className="h-4 w-4 mr-2" />
-                  Post Comment
+                  {isPosting ? "Posting..." : "Post Comment"}
                 </Button>
               </div>
             </div>

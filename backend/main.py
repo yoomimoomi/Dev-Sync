@@ -20,7 +20,8 @@ from app.models.application import Application
 from app.models.comment import Comment
 from app.routes import router
 from app.schemas.account import AccountCreate, AccountRead
-from app.schemas.application import ApplicationCreate,ApplicationRead
+from app.schemas.application import ApplicationCreate, ApplicationRead, ProjectOwnerView
+from app.schemas.comment import CommentCreate, CommentRead
 from app.schemas.projects import ProjectCreate, ProjectRead
 
 
@@ -216,10 +217,20 @@ async def get_projects(db: Session = Depends(get_db)):
     return projects
 
 
-@app.get("/projects/{user_id}", response_model=list[ProjectRead])
-async def get_projects_by_user_id(user_id: str, db: Session = Depends(get_db)):
+@app.get("/projects/me", response_model=list[ProjectRead])
+async def get_my_projects(
+    current_user: Annotated[Account, Depends(get_current_user)],
+    db: Session = Depends(get_db),
+):
     projects = (
-        db.query(Project).filter(Project.user_id == user_id).all()
+        db.query(Project)
+        .filter(Project.user_id == current_user.user_id)
+        .options(
+            selectinload(Project.owner),
+            selectinload(Project.applications).selectinload(Application.user),
+            selectinload(Project.comments).selectinload(Comment.user),
+        )
+        .all()
     )
     if not projects:
         raise HTTPException(status_code=404, detail="No projects found")   
@@ -233,6 +244,29 @@ async def get_project_by_id(project_id: str, db: Session = Depends(get_db)):
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
     return project
+
+
+@app.get("/projects/{project_id}", response_model=ProjectRead)
+async def get_project_by_id(project_id: str, db: Session = Depends(get_db)):
+    project = (
+        db.query(Project)
+        .filter(Project.project_id == project_id)
+        .options(
+            selectinload(Project.owner),
+            selectinload(Project.applications).selectinload(Application.user),
+            selectinload(Project.comments).selectinload(Comment.user),
+        )
+        .first()
+    )
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    return project
+
+
+@app.get("/projects/user/{user_id}", response_model=list[ProjectRead])
+async def get_projects_by_user_id(user_id: str, db: Session = Depends(get_db)):
+    projects = db.query(Project).filter(Project.user_id == user_id).all()
+    return projects
 
 
 @app.post("/project", response_model=ProjectRead)
@@ -255,27 +289,42 @@ async def create_project(project_in: ProjectCreate, current_user: Annotated[Acco
     return new_project
 
 
-@app.get("/applications/to-projects", response_model=list[ApplicationRead])
+@app.get("/applications/my-projects", response_model=list[ProjectOwnerView])
 async def get_applications_to_my_projects(
     current_user: Annotated[Account, Depends(get_current_user)],
     db: Session = Depends(get_db),
 ):
-    applications = (
-        db.query(Application)
-        .join(Project, Application.project_id == Project.project_id)
+    rows = (
+        db.query(
+            Application.user_id,
+            Account.name.label("user_name"),
+            Application.project_id,
+            Project.title.label("project_title"),
+            Application.status,
+            Application.created_at,
+        )
+        .join(Account, Account.user_id == Application.user_id)
+        .join(Project, Project.project_id == Application.project_id)
         .filter(Project.user_id == current_user.user_id)
+        .order_by(Application.created_at.desc())
         .all()
     )
-    return applications
+    return [
+        {
+            "user_id": r.user_id,
+            "user_name": r.user_name,
+            "project_id": r.project_id,
+            "project_title": r.project_title,
+            "status": r.status,
+            "created_at": r.created_at,
+        }
+        for r in rows
+    ]
 
 
-@app.get("/applications/{user_id}", response_model=list[ApplicationRead])
+@app.get("/applications/user/{user_id}", response_model=list[ApplicationRead])
 async def get_applications_by_user_id(user_id: str, db: Session = Depends(get_db)):
-    applications = (
-        db.query(Application).filter(Application.user_id == user_id).all()
-    )
-    if not applications:
-        raise HTTPException(status_code=404, detail="No applications found")
+    applications = db.query(Application).filter(Application.user_id == user_id).all()
     return applications
 
 
@@ -299,3 +348,46 @@ async def create_application(application_in: ApplicationCreate, current_user: An
     db.commit()
     db.refresh(new_application)
     return new_application
+
+
+@app.post("/comment", response_model=CommentRead)
+async def create_comment(
+    comment_in: CommentCreate,
+    current_user: Annotated[Account, Depends(get_current_user)],
+    db: Session = Depends(get_db),
+):
+    project = db.query(Project).filter(Project.project_id == comment_in.project_id).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    existing_comment = (
+        db.query(Comment)
+        .filter(
+            Comment.user_id == current_user.user_id,
+            Comment.project_id == comment_in.project_id,
+        )
+        .first()
+    )
+    if existing_comment:
+        raise HTTPException(
+            status_code=400,
+            detail="You have already posted a comment on this project",
+        )
+
+    new_comment = Comment(
+        user_id=current_user.user_id,
+        project_id=comment_in.project_id,
+        content=comment_in.content.strip(),
+    )
+    db.add(new_comment)
+    db.commit()
+    db.refresh(new_comment)
+    return (
+        db.query(Comment)
+        .filter(
+            Comment.user_id == new_comment.user_id,
+            Comment.project_id == new_comment.project_id,
+        )
+        .options(selectinload(Comment.user))
+        .first()
+    )

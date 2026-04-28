@@ -16,6 +16,16 @@ export interface Project {
   skills: string[]
   technologies: string[]
   created_at: string
+  applicant_user_names: Array<string | null>
+  comments: Array<{
+    user_id: string
+    project_id: string
+    content: string | null
+    created_at: string | null
+    user: {
+      name: string
+    } | null
+  }>
 }
 
 interface ProjectCardProps {
