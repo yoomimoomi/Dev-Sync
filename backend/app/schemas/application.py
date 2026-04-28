@@ -10,12 +10,10 @@ class ApplicationCreate(BaseModel):
 
 class ApplicationRead(BaseModel):
     user_id: str = Field( ..., max_length=10)
-    user_name: str = Field( ..., max_length=50)
     project_id: str = Field( ..., max_length=10)
-    project_title: str = Field( ..., max_length=50)
-    content: str = Field(String, min_length=8)
+    content: str = Field(..., min_length=8)
     created_at: datetime = Field(default_factory=datetime.now)
-    status: str = Field(...,max_length=6)
+    status: str = Field(...,max_length=8)
     model_config = ConfigDict(from_attributes=True)
 
 
