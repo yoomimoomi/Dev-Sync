@@ -3,6 +3,7 @@ from datetime import datetime, timedelta, timezone
 from random import randrange
 from typing import Annotated
 from app.models.project import Project
+from app.models.team import Team
 
 import jwt
 from fastapi import Depends, FastAPI, HTTPException, status
@@ -20,7 +21,7 @@ from app.models.application import Application
 from app.models.comment import Comment
 from app.routes import router
 from app.schemas.account import AccountCreate, AccountRead
-from app.schemas.application import ApplicationCreate, ApplicationRead, ProjectOwnerView
+from app.schemas.application import ApplicationCreate, ApplicationRead, ProjectOwnerView, ApplicationDecision
 from app.schemas.comment import CommentCreate, CommentRead
 from app.schemas.projects import ProjectCreate, ProjectRead
 
@@ -282,10 +283,19 @@ async def create_project(project_in: ProjectCreate, current_user: Annotated[Acco
         technologies=project_in.technologies,
         status="Open",
     )
-    db.add(new_project)
-    db.commit()
-    
-    db.refresh(new_project)
+    new_team = Team(
+        user_id=current_user.user_id,
+        team_id=new_project.project_id,
+    )
+    try:
+        db.add(new_team)
+        db.add(new_project)
+        db.commit()
+        db.refresh(new_team)
+        db.refresh(new_project)
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
     return new_project
 
 
@@ -348,6 +358,50 @@ async def create_application(application_in: ApplicationCreate, current_user: An
     db.commit()
     db.refresh(new_application)
     return new_application
+
+
+@app.post("/project/application-decision/",  response_model=ApplicationRead)
+async def accept_application(decision_in: ApplicationDecision, current_user: Annotated[Account, Depends(get_current_user)], db: Session = Depends(get_db)):
+    project = db.query(Project).filter(Project.project_id == decision_in.project_id).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    if project.user_id != current_user.user_id:
+        raise HTTPException(status_code=403, detail="You are not the owner of this project")
+    if project.status == "Closed":
+        raise HTTPException(status_code=400, detail="Project is closed, cannot accept applications")
+
+    application = db.query(Application).filter(Application.user_id == decision_in.user_id, Application.project_id == decision_in.project_id).first()
+    if not application:
+        raise HTTPException(status_code=404, detail="Application not found")
+    if application.status != "Pending":
+        raise HTTPException(status_code=400, detail="Application is processed already")
+
+    if decision_in.decision == "Accept":
+        application.status = "Accepted"
+        try:
+            new_team = Team(
+                user_id=decision_in.user_id,
+                team_id=decision_in.project_id,
+            )
+            application.status = "Accepted"
+            application.decision_reason = decision_in.reason
+            db.add(new_team)
+            db.commit()
+            db.refresh(application)
+            db.refresh(new_team)
+            return application
+        except Exception as e:
+            db.rollback()
+            raise HTTPException(status_code=500, detail=str(e))
+
+    elif decision_in.decision == "Reject":
+        application.status = "Rejected"
+        application.decision_reason = decision_in.reason
+        db.commit()
+        db.refresh(application)
+        return application
+    else:
+        raise HTTPException(status_code=400, detail="Invalid decision")
 
 
 @app.post("/comment", response_model=CommentRead)
