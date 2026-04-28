@@ -317,12 +317,44 @@ async def get_applications_by_user_id(user_id: str, db: Session = Depends(get_db
     return applications
 
 @app.post("/application", response_model=ApplicationRead)
-async def create_application(application_in: ApplicationCreate, current_user: Annotated[Account, Depends(get_current_user)], db: Session = Depends(get_db)):
+async def create_application(
+    application_in: ApplicationCreate,
+    current_user: Annotated[Account, Depends(get_current_user)],
+    db: Session = Depends(get_db),
+):
+    project = (
+        db.query(Project)
+        .filter(Project.project_id == application_in.project_id)
+        .first()
+    )
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    if project.user_id == current_user.user_id:
+        raise HTTPException(
+            status_code=400,
+            detail="You cannot apply to your own project",
+        )
+
+    existing = (
+        db.query(Application)
+        .filter(
+            Application.user_id == current_user.user_id,
+            Application.project_id == application_in.project_id,
+        )
+        .first()
+    )
+    if existing:
+        raise HTTPException(
+            status_code=400,
+            detail="You already have an application for this project",
+        )
+
     new_application = Application(
         user_id=current_user.user_id,
         project_id=application_in.project_id,
         status="Pending",
-        content=application_in.content,
+        content=application_in.content.strip(),
     )
     db.add(new_application)
     db.commit()

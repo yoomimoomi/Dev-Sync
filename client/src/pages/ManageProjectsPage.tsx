@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Plus, Settings, Trash2, Eye, Users } from 'lucide-react'
 import { Navbar } from '@/components/navbar'
@@ -14,6 +14,11 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import {
+  API_BASE_URL,
+  APPLICATION_SUBMITTED_EVENT,
+  TOKEN_STORAGE_KEY,
+} from '@/lib/api-config'
 
 type JoinRequest = {
   user_id: string
@@ -23,9 +28,6 @@ type JoinRequest = {
   status: string
   created_at: string
 }
-
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000'
-const TOKEN_STORAGE_KEY = 'devsync_access_token'
 
 function initials(name: string) {
   const parts = name.trim().split(/\s+/).filter(Boolean)
@@ -43,40 +45,49 @@ export function ManageProjectsPage() {
     setMounted(true)
   }, [])
 
-  useEffect(() => {
-    const fetchProjects = async () => {
-      try {
-        const token = localStorage.getItem(TOKEN_STORAGE_KEY)
-        const response = await fetch(`${API_BASE_URL}/projects/me`, {
-          headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-        })
-        if (!response.ok) throw new Error('Failed to fetch projects')
-        const data: Project[] = await response.json()
-        setProjects(data)
-      } catch (error) {
-        console.error('Error fetching projects:', error)
-      }
+  const loadDashboard = useCallback(async () => {
+    const token = localStorage.getItem(TOKEN_STORAGE_KEY)
+    if (!token) {
+      setProjects([])
+      setJoinRequests([])
+      return
     }
-    fetchProjects()
+
+    try {
+      const headers = { Authorization: `Bearer ${token}` }
+      const [projRes, appRes] = await Promise.all([
+        fetch(`${API_BASE_URL}/projects/me`, { headers }),
+        fetch(`${API_BASE_URL}/applications/my-projects`, { headers }),
+      ])
+
+      if (projRes.ok) {
+        setProjects((await projRes.json()) as Project[])
+      } else {
+        setProjects([])
+      }
+
+      if (appRes.ok) {
+        setJoinRequests((await appRes.json()) as JoinRequest[])
+      } else {
+        setJoinRequests([])
+      }
+    } catch (error) {
+      console.error('Error loading manage projects:', error)
+    }
   }, [])
 
   useEffect(() => {
-    const fetchJoinRequests = async () => {
-      try {
-        const token = localStorage.getItem(TOKEN_STORAGE_KEY)
-        if (!token) return
-        const response = await fetch(`${API_BASE_URL}/applications/my-projects`, {
-          headers: { Authorization: `Bearer ${token}` },
-        })
-        if (!response.ok) throw new Error('Failed to fetch join requests')
-        const data: JoinRequest[] = await response.json()
-        setJoinRequests(data)
-      } catch (error) {
-        console.error('Error fetching join requests:', error)
-      }
+    void loadDashboard()
+  }, [loadDashboard])
+
+  useEffect(() => {
+    const onSubmitted = () => {
+      void loadDashboard()
     }
-    fetchJoinRequests()
-  }, [])
+    window.addEventListener(APPLICATION_SUBMITTED_EVENT, onSubmitted)
+    return () =>
+      window.removeEventListener(APPLICATION_SUBMITTED_EVENT, onSubmitted)
+  }, [loadDashboard])
 
   return (
     <div className="min-h-screen bg-background">
