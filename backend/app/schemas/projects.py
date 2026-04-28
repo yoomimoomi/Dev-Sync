@@ -4,6 +4,7 @@ from typing import Any, Optional
 from pydantic import BaseModel, ConfigDict, field_validator
 
 from app.schemas.account import AccountRead
+from app.schemas.comment import CommentRead
 
 
 def _coerce_none_to_list(v: Any) -> list:
@@ -43,3 +44,4 @@ class ProjectRead(ProjectBase):
     owner: Optional[AccountRead] = None
     applicant_user_names: list[Optional[str]] = []
     commenter_names: list[Optional[str]] = []
+    comments: list[CommentRead] = []

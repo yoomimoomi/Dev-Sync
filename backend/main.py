@@ -21,6 +21,7 @@ from app.models.comment import Comment
 from app.routes import router
 from app.schemas.account import AccountCreate, AccountRead
 from app.schemas.application import ApplicationCreate, ApplicationRead, ProjectOwnerView
+from app.schemas.comment import CommentCreate, CommentRead
 from app.schemas.projects import ProjectCreate, ProjectRead
 
 
@@ -234,6 +235,23 @@ async def get_my_projects(
     return projects
 
 
+@app.get("/projects/{project_id}", response_model=ProjectRead)
+async def get_project_by_id(project_id: str, db: Session = Depends(get_db)):
+    project = (
+        db.query(Project)
+        .filter(Project.project_id == project_id)
+        .options(
+            selectinload(Project.owner),
+            selectinload(Project.applications).selectinload(Application.user),
+            selectinload(Project.comments).selectinload(Comment.user),
+        )
+        .first()
+    )
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    return project
+
+
 @app.get("/projects/user/{user_id}", response_model=list[ProjectRead])
 async def get_projects_by_user_id(user_id: str, db: Session = Depends(get_db)):
     projects = db.query(Project).filter(Project.user_id == user_id).all()
@@ -310,3 +328,46 @@ async def create_application(application_in: ApplicationCreate, current_user: An
     db.commit()
     db.refresh(new_application)
     return new_application
+
+
+@app.post("/comment", response_model=CommentRead)
+async def create_comment(
+    comment_in: CommentCreate,
+    current_user: Annotated[Account, Depends(get_current_user)],
+    db: Session = Depends(get_db),
+):
+    project = db.query(Project).filter(Project.project_id == comment_in.project_id).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    existing_comment = (
+        db.query(Comment)
+        .filter(
+            Comment.user_id == current_user.user_id,
+            Comment.project_id == comment_in.project_id,
+        )
+        .first()
+    )
+    if existing_comment:
+        raise HTTPException(
+            status_code=400,
+            detail="You have already posted a comment on this project",
+        )
+
+    new_comment = Comment(
+        user_id=current_user.user_id,
+        project_id=comment_in.project_id,
+        content=comment_in.content.strip(),
+    )
+    db.add(new_comment)
+    db.commit()
+    db.refresh(new_comment)
+    return (
+        db.query(Comment)
+        .filter(
+            Comment.user_id == new_comment.user_id,
+            Comment.project_id == new_comment.project_id,
+        )
+        .options(selectinload(Comment.user))
+        .first()
+    )

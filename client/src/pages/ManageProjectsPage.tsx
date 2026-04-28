@@ -185,7 +185,7 @@ export function ManageProjectsPage() {
                     <div className="flex items-center gap-4 text-sm text-muted-foreground">
                       <span className="flex items-center gap-1">
                         <Users className="h-4 w-4" />
-                        3 requests
+                        {project.applicant_user_names.length} request{project.applicant_user_names.length !== 1 ? 's' : ''}
                       </span>
                     </div>
                   </div>

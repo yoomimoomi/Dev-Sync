@@ -4,50 +4,66 @@ import { Navbar } from '@/components/navbar'
 import { ProjectCard, type Project } from '@/components/project-card'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Mail, MapPin, Link as LinkIcon, Calendar, Edit, Github, Linkedin } from 'lucide-react'
+import { Mail, Calendar, Edit, User } from 'lucide-react'
 
-const userProfile = {
-  name: 'Sarah Chen',
-  email: 'sarah.chen@university.edu',
-  location: 'San Francisco, CA',
-  website: 'sarahchen.dev',
-  joinDate: 'September 2024',
-  bio: 'Computer Science student passionate about AI/ML and building tools that help students learn more effectively. Looking to collaborate on impactful projects.',
-  skills: [
-    'React',
-    'Python',
-    'TypeScript',
-    'Next.js',
-    'AI/ML',
-    'Node.js',
-    'PostgreSQL',
-    'Docker',
-  ],
-  github: 'sarahchen',
-  linkedin: 'sarahchen',
-  stats: {
-    projectsCreated: 2,
-    projectsJoined: 5,
-    collaborators: 12,
-  },
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000'
+const TOKEN_STORAGE_KEY = 'devsync_access_token'
+
+type Profile = {
+  user_id: string
+  name: string
+  email: string
+  grade: string | null
+  roles: string[]
+  skills: string[]
+  technologies: string[]
+}
+
+function initials(name: string) {
+  return name
+    .split(' ')
+    .filter(Boolean)
+    .map((n) => n[0])
+    .join('')
+    .slice(0, 2)
+    .toUpperCase()
 }
 
 export function ProfilePage() {
   const [projects, setProjects] = useState<Project[]>([])
+  const [profile, setProfile] = useState<Profile | null>(null)
 
   useEffect(() => {
-    const fetchProjects = async () => {
+    const fetchProfilePageData = async () => {
       try {
-        const response = await fetch('http://127.0.0.1:8000/projects')
-        if (!response.ok) throw new Error('Failed to fetch projects')
-        const data: Project[] = await response.json()
-        setProjects(data)
+        const token = localStorage.getItem(TOKEN_STORAGE_KEY)
+        if (!token) return
+
+        const [profileResponse, projectsResponse] = await Promise.all([
+          fetch(`${API_BASE_URL}/user/me`, {
+            headers: { Authorization: `Bearer ${token}` },
+          }),
+          fetch(`${API_BASE_URL}/projects/me`, {
+            headers: { Authorization: `Bearer ${token}` },
+          }),
+        ])
+
+        if (!profileResponse.ok) throw new Error('Failed to fetch profile')
+        if (!projectsResponse.ok) throw new Error('Failed to fetch projects')
+
+        const profileData: Profile = await profileResponse.json()
+        const projectData: Project[] = await projectsResponse.json()
+
+        setProfile(profileData)
+        setProjects(projectData)
       } catch (error) {
-        console.error('Error fetching projects:', error)
+        console.error('Error fetching profile page data:', error)
       }
     }
-    fetchProjects()
+    fetchProfilePageData()
   }, [])
+
+  const profileTags = profile ? [...profile.roles, ...profile.skills, ...profile.technologies] : []
 
   return (
     <div className="min-h-screen bg-background">
@@ -59,13 +75,12 @@ export function ProfilePage() {
               <CardContent className="pt-6">
                 <div className="flex flex-col items-center text-center">
                   <div className="flex h-24 w-24 items-center justify-center rounded-full bg-primary/10 text-4xl font-bold text-primary">
-                    {userProfile.name
-                      .split(' ')
-                      .map((n) => n[0])
-                      .join('')}
+                    {profile ? initials(profile.name) : '??'}
                   </div>
-                  <h1 className="mt-4 text-xl font-bold text-foreground">{userProfile.name}</h1>
-                  <p className="mt-2 text-sm text-muted-foreground">{userProfile.bio}</p>
+                  <h1 className="mt-4 text-xl font-bold text-foreground">{profile?.name ?? 'Profile'}</h1>
+                  <p className="mt-2 text-sm text-muted-foreground">
+                    {profile?.grade ? `${profile.grade} developer` : 'Logged-in DevSync user'}
+                  </p>
                   <Button className="mt-4 w-full" variant="outline">
                     <Edit className="mr-2 h-4 w-4" />
                     Edit Profile
@@ -75,41 +90,18 @@ export function ProfilePage() {
                 <div className="mt-6 space-y-3">
                   <div className="flex items-center gap-3 text-sm">
                     <Mail className="h-4 w-4 text-muted-foreground" />
-                    <span className="text-muted-foreground">{userProfile.email}</span>
+                    <span className="text-muted-foreground">{profile?.email ?? 'No email available'}</span>
                   </div>
                   <div className="flex items-center gap-3 text-sm">
-                    <MapPin className="h-4 w-4 text-muted-foreground" />
-                    <span className="text-muted-foreground">{userProfile.location}</span>
-                  </div>
-                  <div className="flex items-center gap-3 text-sm">
-                    <LinkIcon className="h-4 w-4 text-muted-foreground" />
-                    <a href={`https://${userProfile.website}`} className="text-primary hover:underline">
-                      {userProfile.website}
-                    </a>
+                    <User className="h-4 w-4 text-muted-foreground" />
+                    <span className="text-muted-foreground">{profile?.user_id ?? 'No user id available'}</span>
                   </div>
                   <div className="flex items-center gap-3 text-sm">
                     <Calendar className="h-4 w-4 text-muted-foreground" />
-                    <span className="text-muted-foreground">Joined {userProfile.joinDate}</span>
+                    <span className="text-muted-foreground">
+                      {profile?.grade ? `Grade: ${profile.grade}` : 'Grade not set'}
+                    </span>
                   </div>
-                </div>
-
-                <div className="mt-6 flex justify-center gap-4">
-                  <a
-                    href={`https://github.com/${userProfile.github}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex h-10 w-10 items-center justify-center rounded-full bg-muted text-muted-foreground transition-colors hover:bg-primary hover:text-primary-foreground"
-                  >
-                    <Github className="h-5 w-5" />
-                  </a>
-                  <a
-                    href={`https://linkedin.com/in/${userProfile.linkedin}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex h-10 w-10 items-center justify-center rounded-full bg-muted text-muted-foreground transition-colors hover:bg-primary hover:text-primary-foreground"
-                  >
-                    <Linkedin className="h-5 w-5" />
-                  </a>
                 </div>
               </CardContent>
             </Card>
@@ -121,16 +113,16 @@ export function ProfilePage() {
               <CardContent>
                 <div className="grid grid-cols-3 gap-4 text-center">
                   <div>
-                    <p className="text-2xl font-bold text-primary">{userProfile.stats.projectsCreated}</p>
+                    <p className="text-2xl font-bold text-primary">{projects.length}</p>
                     <p className="text-xs text-muted-foreground">Created</p>
                   </div>
                   <div>
-                    <p className="text-2xl font-bold text-primary">{userProfile.stats.projectsJoined}</p>
-                    <p className="text-xs text-muted-foreground">Joined</p>
+                    <p className="text-2xl font-bold text-primary">{profile?.roles.length ?? 0}</p>
+                    <p className="text-xs text-muted-foreground">Roles</p>
                   </div>
                   <div>
-                    <p className="text-2xl font-bold text-primary">{userProfile.stats.collaborators}</p>
-                    <p className="text-xs text-muted-foreground">Collaborators</p>
+                    <p className="text-2xl font-bold text-primary">{profileTags.length}</p>
+                    <p className="text-xs text-muted-foreground">Tags</p>
                   </div>
                 </div>
               </CardContent>
@@ -142,7 +134,7 @@ export function ProfilePage() {
               </CardHeader>
               <CardContent>
                 <div className="flex flex-wrap gap-2">
-                  {userProfile.skills.map((skill) => (
+                  {profileTags.map((skill) => (
                     <span
                       key={skill}
                       className="rounded-full bg-secondary px-3 py-1 text-xs font-medium text-secondary-foreground"

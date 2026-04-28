@@ -1,16 +1,55 @@
+import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { ArrowLeft, Users, Calendar, MapPin } from 'lucide-react'
 import { Navbar } from '@/components/navbar'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { mockProjects, mockComments } from '@/lib/mock-data'
+import { type Project } from '@/components/project-card'
 import { CommentSection } from '@/components/comment-section'
 import { Button } from '@/components/ui/button'
+import type { Comment } from '@/lib/mock-data'
+
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000'
 
 export function ProjectPage() {
   const { id = '' } = useParams()
-  const project = mockProjects.find((p) => p.project_id === id)
+  const [project, setProject] = useState<Project | null>(null)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    const fetchProject = async () => {
+      try {
+        const response = await fetch(`${API_BASE_URL}/projects/${id}`)
+        if (!response.ok) throw new Error('Failed to fetch project')
+        const data: Project = await response.json()
+        setProject(data)
+      } catch (error) {
+        console.error('Error fetching project:', error)
+        setProject(null)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    if (!id) {
+      setLoading(false)
+      return
+    }
+
+    fetchProject()
+  }, [id])
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-background">
+        <Navbar />
+        <main className="container mx-auto px-4 py-16 text-center">
+          <p className="text-muted-foreground">Loading project...</p>
+        </main>
+      </div>
+    )
+  }
 
   if (!project) {
     return (
@@ -27,7 +66,13 @@ export function ProjectPage() {
     )
   }
 
-  const projectComments = mockComments.filter((c) => c.projectId === id)
+  const projectComments: Comment[] = project.comments.map((comment) => ({
+    id: `${comment.user_id}-${comment.project_id}`,
+    projectId: comment.project_id,
+    author: { name: comment.user?.name ?? 'Unknown User' },
+    content: comment.content ?? '',
+    createdAt: comment.created_at ?? '',
+  }))
 
   return (
     <div className="min-h-screen bg-background">
