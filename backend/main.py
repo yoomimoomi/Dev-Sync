@@ -221,7 +221,18 @@ async def get_projects_by_user_id(user_id: str, db: Session = Depends(get_db)):
     projects = (
         db.query(Project).filter(Project.user_id == user_id).all()
     )
+    if not projects:
+        raise HTTPException(status_code=404, detail="No projects found")   
     return projects
+
+@app.get("/project/{project_id}", response_model=ProjectRead)
+async def get_project_by_id(project_id: str, db: Session = Depends(get_db)):
+    project = (
+        db.query(Project).filter(Project.project_id == project_id).first()
+    )
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    return project
 
 
 @app.post("/project", response_model=ProjectRead)
@@ -244,15 +255,40 @@ async def create_project(project_in: ProjectCreate, current_user: Annotated[Acco
     return new_project
 
 
+@app.get("/applications/to-projects", response_model=list[ApplicationRead])
+async def get_applications_to_my_projects(
+    current_user: Annotated[Account, Depends(get_current_user)],
+    db: Session = Depends(get_db),
+):
+    applications = (
+        db.query(Application)
+        .join(Project, Application.project_id == Project.project_id)
+        .filter(Project.user_id == current_user.user_id)
+        .all()
+    )
+    return applications
+
+
 @app.get("/applications/{user_id}", response_model=list[ApplicationRead])
 async def get_applications_by_user_id(user_id: str, db: Session = Depends(get_db)):
     applications = (
         db.query(Application).filter(Application.user_id == user_id).all()
     )
+    if not applications:
+        raise HTTPException(status_code=404, detail="No applications found")
     return applications
+
 
 @app.post("/application", response_model=ApplicationRead)
 async def create_application(application_in: ApplicationCreate, current_user: Annotated[Account, Depends(get_current_user)], db: Session = Depends(get_db)):
+    project = db.query(Project).filter(Project.project_id == application_in.project_id).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    if project.user_id == current_user.user_id:
+        raise HTTPException(status_code=400, detail="You cannot apply to your own project")
+    if project.status == "Closed":
+        raise HTTPException(status_code=400, detail="Project is closed")
+
     new_application = Application(
         user_id=current_user.user_id,
         project_id=application_in.project_id,
