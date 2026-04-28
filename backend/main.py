@@ -20,7 +20,7 @@ from app.models.application import Application
 from app.models.comment import Comment
 from app.routes import router
 from app.schemas.account import AccountCreate, AccountRead
-from app.schemas.application import ApplicationCreate,ApplicationRead
+from app.schemas.application import ApplicationCreate, ApplicationRead, ProjectOwnerView
 from app.schemas.projects import ProjectCreate, ProjectRead
 
 
@@ -216,11 +216,27 @@ async def get_projects(db: Session = Depends(get_db)):
     return projects
 
 
-@app.get("/projects/{user_id}", response_model=list[ProjectRead])
-async def get_projects_by_user_id(user_id: str, db: Session = Depends(get_db)):
+@app.get("/projects/me", response_model=list[ProjectRead])
+async def get_my_projects(
+    current_user: Annotated[Account, Depends(get_current_user)],
+    db: Session = Depends(get_db),
+):
     projects = (
-        db.query(Project).filter(Project.user_id == user_id).all()
+        db.query(Project)
+        .filter(Project.user_id == current_user.user_id)
+        .options(
+            selectinload(Project.owner),
+            selectinload(Project.applications).selectinload(Application.user),
+            selectinload(Project.comments).selectinload(Comment.user),
+        )
+        .all()
     )
+    return projects
+
+
+@app.get("/projects/user/{user_id}", response_model=list[ProjectRead])
+async def get_projects_by_user_id(user_id: str, db: Session = Depends(get_db)):
+    projects = db.query(Project).filter(Project.user_id == user_id).all()
     return projects
 
 
@@ -244,11 +260,42 @@ async def create_project(project_in: ProjectCreate, current_user: Annotated[Acco
     return new_project
 
 
-@app.get("/applications/{user_id}", response_model=list[ApplicationRead])
-async def get_applications_by_user_id(user_id: str, db: Session = Depends(get_db)):
-    applications = (
-        db.query(Application).filter(Application.user_id == user_id).all()
+@app.get("/applications/my-projects", response_model=list[ProjectOwnerView])
+async def get_applications_to_my_projects(
+    current_user: Annotated[Account, Depends(get_current_user)],
+    db: Session = Depends(get_db),
+):
+    rows = (
+        db.query(
+            Application.user_id,
+            Account.name.label("user_name"),
+            Application.project_id,
+            Project.title.label("project_title"),
+            Application.status,
+            Application.created_at,
+        )
+        .join(Account, Account.user_id == Application.user_id)
+        .join(Project, Project.project_id == Application.project_id)
+        .filter(Project.user_id == current_user.user_id)
+        .order_by(Application.created_at.desc())
+        .all()
     )
+    return [
+        {
+            "user_id": r.user_id,
+            "user_name": r.user_name,
+            "project_id": r.project_id,
+            "project_title": r.project_title,
+            "status": r.status,
+            "created_at": r.created_at,
+        }
+        for r in rows
+    ]
+
+
+@app.get("/applications/user/{user_id}", response_model=list[ApplicationRead])
+async def get_applications_by_user_id(user_id: str, db: Session = Depends(get_db)):
+    applications = db.query(Application).filter(Application.user_id == user_id).all()
     return applications
 
 @app.post("/application", response_model=ApplicationRead)
