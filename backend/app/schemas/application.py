@@ -34,3 +34,9 @@ class ProjectOwnerView(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class ApplicationDecision(BaseModel):
+    user_id: str = Field( ..., max_length=10)
+    project_id: str = Field( ..., max_length=10)
+    reason: str = Field(..., min_length=8)
+    decision: str = Field(...,max_length=8)
+    model_config = ConfigDict(from_attributes=True)

@@ -24,6 +24,6 @@ class Application(Base):
     status: Mapped[Optional[str]] = mapped_column(String(8))
     content: Mapped[Optional[str]] = mapped_column(Text)
     created_at: Mapped[Optional[datetime.datetime]] = mapped_column(DateTime, server_default=text('CURRENT_TIMESTAMP'))
-
+    decision_reason: Mapped[Optional[str]] = mapped_column(Text)
     project: Mapped['Project'] = relationship('Project', back_populates='applications')
     user: Mapped['Account'] = relationship('Account', back_populates='applications')
