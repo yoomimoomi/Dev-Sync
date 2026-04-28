@@ -3,9 +3,9 @@ from pydantic import BaseModel, ConfigDict, Field
 
 
 class ApplicationCreate(BaseModel):
-    """Create body: applicant is inferred from JWT; do not send user_id."""
-
+    user_id: str | None = Field(default=None, max_length=10)
     project_id: str = Field(..., max_length=10)
+    status: str | None = Field(default=None, max_length=8)
     content: str = Field(..., min_length=8)
 
 

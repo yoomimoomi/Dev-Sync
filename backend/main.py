@@ -322,6 +322,18 @@ async def create_application(
     current_user: Annotated[Account, Depends(get_current_user)],
     db: Session = Depends(get_db),
 ):
+    if application_in.user_id and application_in.user_id != current_user.user_id:
+        raise HTTPException(
+            status_code=400,
+            detail="Submitted user_id does not match authenticated user",
+        )
+
+    if application_in.status and application_in.status.lower() != "pending":
+        raise HTTPException(
+            status_code=400,
+            detail="Initial application status must be Pending",
+        )
+
     project = (
         db.query(Project)
         .filter(Project.project_id == application_in.project_id)
