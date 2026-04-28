@@ -7,10 +7,28 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { mockProjects, mockComments } from '@/lib/mock-data'
 import { CommentSection } from '@/components/comment-section'
 import { Button } from '@/components/ui/button'
+import { useState, useEffect } from 'react'
+import type { Project } from '@/components/project-card'
+
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000"
 
 export function ProjectPage() {
   const { id = '' } = useParams()
-  const project = mockProjects.find((p) => p.project_id === id)
+  const [project, setProject] = useState<Project | null>(null)
+  
+  useEffect(() => { 
+    const fetchProject = async () => {
+      try {
+        const response = await fetch(`${API_BASE_URL}/project/${id}`)
+        if (!response.ok) throw new Error('Failed to fetch project')
+        const data: Project = await response.json()
+        setProject(data)  
+      } catch (error) {
+        console.error('Error fetching projects:', error)
+      }
+    }
+    fetchProject()
+  }, [id])
 
   if (!project) {
     return (
@@ -58,27 +76,9 @@ export function ProjectPage() {
                 <div className="prose prose-sm max-w-none text-muted-foreground">
                   <h3 className="mt-0 font-semibold text-foreground">About This Project</h3>
                   <p>{project.description}</p>
-                  <p>
-                    This project is looking for passionate students who want to make a difference. We welcome contributors
-                    of all skill levels and are committed to providing mentorship and learning opportunities
-                    throughout the development process.
-                  </p>
 
                   <h3 className="font-semibold text-foreground">What We&apos;re Building</h3>
-                  <ul>
-                    <li>User-friendly interface with modern design principles</li>
-                    <li>Scalable backend architecture</li>
-                    <li>Integration with third-party services and APIs</li>
-                    <li>Comprehensive testing and documentation</li>
-                  </ul>
 
-                  <h3 className="font-semibold text-foreground">Looking For</h3>
-                  <ul>
-                    <li>Frontend developers (React/Next.js experience preferred)</li>
-                    <li>Backend developers familiar with Node.js or Python</li>
-                    <li>UI/UX designers who can help improve the user experience</li>
-                    <li>Anyone interested in learning and contributing!</li>
-                  </ul>
                 </div>
               </CardContent>
             </Card>

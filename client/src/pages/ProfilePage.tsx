@@ -5,6 +5,7 @@ import { ProjectCard, type Project } from '@/components/project-card'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Mail, MapPin, Link as LinkIcon, Calendar, Edit, Github, Linkedin } from 'lucide-react'
+import { useAuth } from '@/lib/auth-context'
 
 const userProfile = {
   name: 'Sarah Chen',
@@ -33,12 +34,13 @@ const userProfile = {
 }
 
 export function ProfilePage() {
+  const { user } = useAuth()
   const [projects, setProjects] = useState<Project[]>([])
 
   useEffect(() => {
     const fetchProjects = async () => {
       try {
-        const response = await fetch('http://127.0.0.1:8000/projects')
+        const response = await fetch(`http://127.0.0.1:8000/projects/${user.id}`)
         if (!response.ok) throw new Error('Failed to fetch projects')
         const data: Project[] = await response.json()
         setProjects(data)
@@ -59,13 +61,13 @@ export function ProfilePage() {
               <CardContent className="pt-6">
                 <div className="flex flex-col items-center text-center">
                   <div className="flex h-24 w-24 items-center justify-center rounded-full bg-primary/10 text-4xl font-bold text-primary">
-                    {userProfile.name
+                    {user.name
                       .split(' ')
                       .map((n) => n[0])
                       .join('')}
                   </div>
-                  <h1 className="mt-4 text-xl font-bold text-foreground">{userProfile.name}</h1>
-                  <p className="mt-2 text-sm text-muted-foreground">{userProfile.bio}</p>
+                  <h1 className="mt-4 text-xl font-bold text-foreground">{user.name}</h1>
+                  <p className="mt-2 text-sm text-muted-foreground">{user?.bio}</p>
                   <Button className="mt-4 w-full" variant="outline">
                     <Edit className="mr-2 h-4 w-4" />
                     Edit Profile
@@ -75,27 +77,27 @@ export function ProfilePage() {
                 <div className="mt-6 space-y-3">
                   <div className="flex items-center gap-3 text-sm">
                     <Mail className="h-4 w-4 text-muted-foreground" />
-                    <span className="text-muted-foreground">{userProfile.email}</span>
+                    <span className="text-muted-foreground">{user.email}</span>
                   </div>
                   <div className="flex items-center gap-3 text-sm">
                     <MapPin className="h-4 w-4 text-muted-foreground" />
-                    <span className="text-muted-foreground">{userProfile.location}</span>
+                    <span className="text-muted-foreground">{user?.location}</span>
                   </div>
                   <div className="flex items-center gap-3 text-sm">
                     <LinkIcon className="h-4 w-4 text-muted-foreground" />
-                    <a href={`https://${userProfile.website}`} className="text-primary hover:underline">
-                      {userProfile.website}
+                    <a href={`https://${user.website}`} className="text-primary hover:underline">
+                      {user?.website}
                     </a>
                   </div>
                   <div className="flex items-center gap-3 text-sm">
                     <Calendar className="h-4 w-4 text-muted-foreground" />
-                    <span className="text-muted-foreground">Joined {userProfile.joinDate}</span>
+                    <span className="text-muted-foreground">Joined {user?.date}</span>
                   </div>
                 </div>
 
                 <div className="mt-6 flex justify-center gap-4">
                   <a
-                    href={`https://github.com/${userProfile.github}`}
+                    href={`https://github.com/${user?.github}`}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="flex h-10 w-10 items-center justify-center rounded-full bg-muted text-muted-foreground transition-colors hover:bg-primary hover:text-primary-foreground"
@@ -103,7 +105,7 @@ export function ProfilePage() {
                     <Github className="h-5 w-5" />
                   </a>
                   <a
-                    href={`https://linkedin.com/in/${userProfile.linkedin}`}
+                    href={`https://linkedin.com/in/${user?.linkedin}`}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="flex h-10 w-10 items-center justify-center rounded-full bg-muted text-muted-foreground transition-colors hover:bg-primary hover:text-primary-foreground"
@@ -121,15 +123,15 @@ export function ProfilePage() {
               <CardContent>
                 <div className="grid grid-cols-3 gap-4 text-center">
                   <div>
-                    <p className="text-2xl font-bold text-primary">{userProfile.stats.projectsCreated}</p>
+                    <p className="text-2xl font-bold text-primary">{user?.stats?.projectsCreated}</p>
                     <p className="text-xs text-muted-foreground">Created</p>
                   </div>
                   <div>
-                    <p className="text-2xl font-bold text-primary">{userProfile.stats.projectsJoined}</p>
+                    <p className="text-2xl font-bold text-primary">{user?.stats?.projectsJoined}</p>
                     <p className="text-xs text-muted-foreground">Joined</p>
                   </div>
                   <div>
-                    <p className="text-2xl font-bold text-primary">{userProfile.stats.collaborators}</p>
+                    <p className="text-2xl font-bold text-primary">{user?.stats?.collaborators}</p>
                     <p className="text-xs text-muted-foreground">Collaborators</p>
                   </div>
                 </div>
@@ -142,7 +144,7 @@ export function ProfilePage() {
               </CardHeader>
               <CardContent>
                 <div className="flex flex-wrap gap-2">
-                  {userProfile.skills.map((skill) => (
+                  {user?.skills?.map((skill) => (
                     <span
                       key={skill}
                       className="rounded-full bg-secondary px-3 py-1 text-xs font-medium text-secondary-foreground"

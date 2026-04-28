@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
+import { useAuth } from '@/lib/auth-context'
 import { Plus, Settings, Trash2, Eye, Users } from 'lucide-react'
 import { Navbar } from '@/components/navbar'
 import { type Project } from '@/components/project-card'
@@ -14,8 +15,10 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000"
 
 export function ManageProjectsPage() {
+  const { user } = useAuth()
   const [mounted, setMounted] = useState(false)
   const [projects, setProjects] = useState<Project[]>([])
 
@@ -24,9 +27,14 @@ export function ManageProjectsPage() {
   }, [])
 
   useEffect(() => {
+    if (!user?.id) {
+      setProjects([])
+      return
+    }
+
     const fetchProjects = async () => {
       try {
-        const response = await fetch('http://127.0.0.1:8000/projects')
+        const response = await fetch(`${API_BASE_URL}/projects/${user.id}`)
         if (!response.ok) throw new Error('Failed to fetch projects')
         const data: Project[] = await response.json()
         setProjects(data)
@@ -35,7 +43,7 @@ export function ManageProjectsPage() {
       }
     }
     fetchProjects()
-  }, [])
+  }, [user?.id])
 
   return (
     <div className="min-h-screen bg-background">
@@ -54,7 +62,16 @@ export function ManageProjectsPage() {
           </Button>
         </div>
 
-        {projects.length === 0 ? (
+        {!user ? (
+          <Card className="py-12 text-center">
+            <CardContent>
+              <p className="mb-4 text-muted-foreground">Sign in to see your projects.</p>
+              <Button asChild>
+                <Link to="/">Go to home</Link>
+              </Button>
+            </CardContent>
+          </Card>
+        ) : projects.length === 0 ? (
           <Card className="py-12 text-center">
             <CardContent>
               <div className="mb-4 text-muted-foreground">You haven&apos;t created any projects yet</div>
