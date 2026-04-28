@@ -36,7 +36,7 @@ export function ProjectCard({ project }: ProjectCardProps) {
   const tags = [...project.roles, ...project.skills, ...project.technologies]
 
   return (
-    <Link to={`/project/${project.project_id}`}>
+    <Link to={`/project/${project.project_id}`} className="block">
       <Card className="transition-all hover:shadow-lg hover:border-primary/50 cursor-pointer">
         <CardContent className="p-6">
           <div className="flex items-start justify-between gap-4">

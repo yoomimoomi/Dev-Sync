@@ -295,6 +295,7 @@ async def get_applications_to_my_projects(
         .join(Account, Account.user_id == Application.user_id)
         .join(Project, Project.project_id == Application.project_id)
         .filter(Project.user_id == current_user.user_id)
+        .filter(Application.status == "Pending")
         .order_by(Application.created_at.desc())
         .all()
     )
@@ -315,6 +316,66 @@ async def get_applications_to_my_projects(
 async def get_applications_by_user_id(user_id: str, db: Session = Depends(get_db)):
     applications = db.query(Application).filter(Application.user_id == user_id).all()
     return applications
+
+
+@app.patch("/applications/{project_id}/{user_id}/accept", response_model=ApplicationRead)
+async def accept_application(
+    project_id: str,
+    user_id: str,
+    current_user: Annotated[Account, Depends(get_current_user)],
+    db: Session = Depends(get_db),
+):
+    project = db.query(Project).filter(Project.project_id == project_id).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    if project.user_id != current_user.user_id:
+        raise HTTPException(status_code=403, detail="Not allowed to manage this project")
+
+    application = (
+        db.query(Application)
+        .filter(
+            Application.project_id == project_id,
+            Application.user_id == user_id,
+        )
+        .first()
+    )
+    if not application:
+        raise HTTPException(status_code=404, detail="Application not found")
+
+    application.status = "Accepted"
+    db.commit()
+    db.refresh(application)
+    return application
+
+
+@app.delete("/applications/{project_id}/{user_id}")
+async def delete_application(
+    project_id: str,
+    user_id: str,
+    current_user: Annotated[Account, Depends(get_current_user)],
+    db: Session = Depends(get_db),
+):
+    project = db.query(Project).filter(Project.project_id == project_id).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    if project.user_id != current_user.user_id:
+        raise HTTPException(status_code=403, detail="Not allowed to manage this project")
+
+    application = (
+        db.query(Application)
+        .filter(
+            Application.project_id == project_id,
+            Application.user_id == user_id,
+        )
+        .first()
+    )
+    if not application:
+        raise HTTPException(status_code=404, detail="Application not found")
+
+    db.delete(application)
+    db.commit()
+    return {"message": "Application deleted"}
+
 
 @app.post("/application", response_model=ApplicationRead)
 async def create_application(

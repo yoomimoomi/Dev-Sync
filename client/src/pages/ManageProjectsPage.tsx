@@ -40,6 +40,7 @@ export function ManageProjectsPage() {
   const [mounted, setMounted] = useState(false)
   const [projects, setProjects] = useState<Project[]>([])
   const [joinRequests, setJoinRequests] = useState<JoinRequest[]>([])
+  const [requestActionKey, setRequestActionKey] = useState<string | null>(null)
 
   useEffect(() => {
     setMounted(true)
@@ -88,6 +89,50 @@ export function ManageProjectsPage() {
     return () =>
       window.removeEventListener(APPLICATION_SUBMITTED_EVENT, onSubmitted)
   }, [loadDashboard])
+
+  const handleAccept = async (req: JoinRequest) => {
+    const token = localStorage.getItem(TOKEN_STORAGE_KEY)
+    if (!token) return
+    const key = `${req.user_id}-${req.project_id}-accept`
+    setRequestActionKey(key)
+    try {
+      const res = await fetch(
+        `${API_BASE_URL}/applications/${req.project_id}/${req.user_id}/accept`,
+        {
+          method: 'PATCH',
+          headers: { Authorization: `Bearer ${token}` },
+        },
+      )
+      if (!res.ok) throw new Error('Failed to accept request')
+      void loadDashboard()
+    } catch (error) {
+      console.error('Error accepting request:', error)
+    } finally {
+      setRequestActionKey(null)
+    }
+  }
+
+  const handleDelete = async (req: JoinRequest) => {
+    const token = localStorage.getItem(TOKEN_STORAGE_KEY)
+    if (!token) return
+    const key = `${req.user_id}-${req.project_id}-delete`
+    setRequestActionKey(key)
+    try {
+      const res = await fetch(
+        `${API_BASE_URL}/applications/${req.project_id}/${req.user_id}`,
+        {
+          method: 'DELETE',
+          headers: { Authorization: `Bearer ${token}` },
+        },
+      )
+      if (!res.ok) throw new Error('Failed to delete request')
+      void loadDashboard()
+    } catch (error) {
+      console.error('Error deleting request:', error)
+    } finally {
+      setRequestActionKey(null)
+    }
+  }
 
   return (
     <div className="min-h-screen bg-background">
@@ -234,11 +279,20 @@ export function ManageProjectsPage() {
                       </div>
                     </div>
                     <div className="flex gap-2">
-                      <Button size="sm" disabled>
+                      <Button
+                        size="sm"
+                        disabled={requestActionKey !== null}
+                        onClick={() => void handleAccept(req)}
+                      >
                         Accept
                       </Button>
-                      <Button size="sm" variant="outline" disabled>
-                        Decline
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={requestActionKey !== null}
+                        onClick={() => void handleDelete(req)}
+                      >
+                        Delete
                       </Button>
                     </div>
                   </div>
