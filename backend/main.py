@@ -28,6 +28,7 @@ from app.schemas.projects import ProjectCreate, ProjectRead
 ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "30"))
 SECRET_KEY = os.getenv("JWT_SECRET_KEY", "change-this-in-env")
 ALGORITHM = "HS256"
+FRONTEND_URL = os.getenv("FRONTEND_URL")
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 password_hash = PasswordHash.recommended()
@@ -38,7 +39,11 @@ app.include_router(router)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
+    allow_origins=[
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        *([FRONTEND_URL] if FRONTEND_URL else []),
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
