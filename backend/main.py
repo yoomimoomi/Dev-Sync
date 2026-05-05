@@ -23,6 +23,8 @@ from app.schemas.account import AccountCreate, AccountRead
 from app.schemas.application import ApplicationCreate, ApplicationRead, ProjectOwnerView
 from app.schemas.comment import CommentCreate, CommentRead
 from app.schemas.projects import ProjectCreate, ProjectRead
+from app.schemas.notification import NotificationCreate , NotificationRead
+from app.models.notification import Notification
 
 
 ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "30"))
@@ -371,3 +373,23 @@ async def create_comment(
         .options(selectinload(Comment.user))
         .first()
     )
+@app.get("/notifications/{user_id}", response_model= list[NotificationRead])
+async def get_notifications_by_user_id(user_id: str, db: Session = Depends(get_db)):
+    notifications = db.query(Notification).filter(Notification.user_id == user_id).all()
+    return notifications
+
+@app.post("/notification", response_model= NotificationRead)
+async def create_notifications(notification_in: NotificationCreate,
+    current_user: Annotated[Account, Depends(get_current_user)],
+    db: Session = Depends(get_db),
+):
+    new_notification = Notification(
+        user_id=current_user.user_id,
+        project_id=notification_in.project_id,
+        title=notification_in.title,
+        content=notification_in.content,
+    )
+    db.add(new_notification)
+    db.commit()
+    db.refresh(new_notification)
+    return new_notification
