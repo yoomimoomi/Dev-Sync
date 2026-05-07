@@ -306,6 +306,7 @@ async def get_applications_to_my_projects(
         .join(Account, Account.user_id == Application.user_id)
         .join(Project, Project.project_id == Application.project_id)
         .filter(Project.user_id == current_user.user_id)
+        .filter(Application.status == "Pending")
         .order_by(Application.created_at.desc())
         .all()
     )
@@ -327,13 +328,118 @@ async def get_applications_by_user_id(user_id: str, db: Session = Depends(get_db
     applications = db.query(Application).filter(Application.user_id == user_id).all()
     return applications
 
+
+@app.patch("/applications/{project_id}/{user_id}/accept", response_model=ApplicationRead)
+async def accept_application(
+    project_id: str,
+    user_id: str,
+    current_user: Annotated[Account, Depends(get_current_user)],
+    db: Session = Depends(get_db),
+):
+    project = db.query(Project).filter(Project.project_id == project_id).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    if project.user_id != current_user.user_id:
+        raise HTTPException(status_code=403, detail="Not allowed to manage this project")
+
+    application = (
+        db.query(Application)
+        .filter(
+            Application.project_id == project_id,
+            Application.user_id == user_id,
+        )
+        .first()
+    )
+    if not application:
+        raise HTTPException(status_code=404, detail="Application not found")
+
+    application.status = "Accepted"
+    db.commit()
+    db.refresh(application)
+    return application
+
+
+@app.patch("/applications/{project_id}/{user_id}/decline", response_model=ApplicationRead)
+async def decline_application(
+    project_id: str,
+    user_id: str,
+    current_user: Annotated[Account, Depends(get_current_user)],
+    db: Session = Depends(get_db),
+):
+    project = db.query(Project).filter(Project.project_id == project_id).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    if project.user_id != current_user.user_id:
+        raise HTTPException(status_code=403, detail="Not allowed to manage this project")
+
+    application = (
+        db.query(Application)
+        .filter(
+            Application.project_id == project_id,
+            Application.user_id == user_id,
+        )
+        .first()
+    )
+    if not application:
+        raise HTTPException(status_code=404, detail="Application not found")
+
+    application.status = "Declined"
+    db.commit()
+    db.refresh(application)
+    return application
+
+
 @app.post("/application", response_model=ApplicationRead)
-async def create_application(application_in: ApplicationCreate, current_user: Annotated[Account, Depends(get_current_user)], db: Session = Depends(get_db)):
+async def create_application(
+    application_in: ApplicationCreate,
+    current_user: Annotated[Account, Depends(get_current_user)],
+    db: Session = Depends(get_db),
+):
+    if application_in.user_id and application_in.user_id != current_user.user_id:
+        raise HTTPException(
+            status_code=400,
+            detail="Submitted user_id does not match authenticated user",
+        )
+
+    if application_in.status and application_in.status.lower() != "pending":
+        raise HTTPException(
+            status_code=400,
+            detail="Initial application status must be Pending",
+        )
+
+    project = (
+        db.query(Project)
+        .filter(Project.project_id == application_in.project_id)
+        .first()
+    )
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    if project.user_id == current_user.user_id:
+        raise HTTPException(
+            status_code=400,
+            detail="You cannot apply to your own project",
+        )
+
+    existing = (
+        db.query(Application)
+        .filter(
+            Application.user_id == current_user.user_id,
+            Application.project_id == application_in.project_id,
+        )
+        .first()
+    )
+    if existing:
+        raise HTTPException(
+            status_code=400,
+            detail="You already have an application for this project",
+        )
+
     new_application = Application(
         user_id=current_user.user_id,
         project_id=application_in.project_id,
         status="Pending",
-        content=application_in.content,
+        content=application_in.content.strip(),
     )
     db.add(new_application)
     db.commit()
