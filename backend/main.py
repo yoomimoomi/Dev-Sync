@@ -278,6 +278,17 @@ async def create_project(project_in: ProjectCreate, current_user: Annotated[Acco
     return new_project
 
 
+@app.delete("/project/{project_id}", status_code=204)
+async def delete_project(project_id: str, current_user: Annotated[Account, Depends(get_current_user)], db: Session = Depends(get_db)):
+    project = db.query(Project).filter(Project.project_id == project_id).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    if project.user_id != current_user.user_id:
+        raise HTTPException(status_code=403, detail="You are not the owner of this project")
+    db.delete(project)
+    db.commit()
+
+
 @app.get("/applications/my-projects", response_model=list[ProjectOwnerView])
 async def get_applications_to_my_projects(
     current_user: Annotated[Account, Depends(get_current_user)],

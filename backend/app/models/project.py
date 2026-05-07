@@ -31,8 +31,8 @@ class Project(Base):
 
     owner: Mapped[Optional['Account']] = relationship('Account', back_populates='projects')
     owner_name: AssociationProxy[Optional[str]] = association_proxy('owner', 'name')
-    applications: Mapped[list['Application']] = relationship('Application', back_populates='project')
-    comments: Mapped[list['Comment']] = relationship('Comment', back_populates='project')
+    applications: Mapped[list['Application']] = relationship('Application', back_populates='project', passive_deletes=True)
+    comments: Mapped[list['Comment']] = relationship('Comment', back_populates='project', passive_deletes=True)
 
     @property
     def applicant_user_names(self) -> list[Optional[str]]:
