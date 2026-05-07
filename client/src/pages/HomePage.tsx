@@ -57,7 +57,11 @@ export function HomePage() {
               </p>
             )}
             {filteredProjects.length > 0 ? (
-              filteredProjects.map((project) => <ProjectCard key={project.project_id} project={project} />)
+              <div className="space-y-4">
+                {filteredProjects.map((project) => (
+                  <ProjectCard key={project.project_id} project={project} />
+                ))}
+              </div>
             ) : (
               <div className="rounded-lg border border-dashed border-border p-12 text-center">
                 <p className="text-muted-foreground">No projects found matching your search.</p>

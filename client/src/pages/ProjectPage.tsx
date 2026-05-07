@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { type Project } from '@/components/project-card'
 import { CommentSection } from '@/components/comment-section'
+import { JoinRequestDialog } from '@/components/join-request-dialog'
 import { Button } from '@/components/ui/button'
 import type { Comment } from '@/lib/mock-data'
 
@@ -173,7 +174,26 @@ export function ProjectPage() {
                     <span className="font-medium">Remote</span>
                   </div>
                 </div>
-                <div className="mt-6 space-y-3" />
+                <div className="mt-6 space-y-3">
+                  <JoinRequestDialog
+                    projectId={project.project_id}
+                    projectTitle={project.title}
+                    projectOwner={project.owner.name}
+                  >
+                    <Button type="button" className="w-full">
+                      Request to Join
+                    </Button>
+                  </JoinRequestDialog>
+                  <JoinRequestDialog
+                    projectId={project.project_id}
+                    projectTitle={project.title}
+                    projectOwner={project.owner.name}
+                  >
+                    <Button type="button" variant="outline" className="w-full">
+                      Contact Owner
+                    </Button>
+                  </JoinRequestDialog>
+                </div>
               </CardContent>
             </Card>
 
