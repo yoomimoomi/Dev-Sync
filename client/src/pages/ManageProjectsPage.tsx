@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Plus, Settings, Trash2, Eye, Users } from 'lucide-react'
+import { AuthGuard } from '@/components/auth-guard'
 import { Navbar } from '@/components/navbar'
 import { type Project } from '@/components/project-card'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
@@ -135,6 +136,7 @@ export function ManageProjectsPage() {
   }
 
   return (
+    <AuthGuard>
     <div className="min-h-screen bg-background">
       <Navbar />
       <main className="container mx-auto px-4 py-8">
@@ -303,5 +305,6 @@ export function ManageProjectsPage() {
         </Card>
       </main>
     </div>
+    </AuthGuard>
   )
 }
