@@ -113,23 +113,23 @@ export function ManageProjectsPage() {
     }
   }
 
-  const handleDelete = async (req: JoinRequest) => {
+  const handleDecline = async (req: JoinRequest) => {
     const token = localStorage.getItem(TOKEN_STORAGE_KEY)
     if (!token) return
-    const key = `${req.user_id}-${req.project_id}-delete`
+    const key = `${req.user_id}-${req.project_id}-decline`
     setRequestActionKey(key)
     try {
       const res = await fetch(
-        `${API_BASE_URL}/applications/${req.project_id}/${req.user_id}`,
+        `${API_BASE_URL}/applications/${req.project_id}/${req.user_id}/decline`,
         {
-          method: 'DELETE',
+          method: 'PATCH',
           headers: { Authorization: `Bearer ${token}` },
         },
       )
-      if (!res.ok) throw new Error('Failed to delete request')
+      if (!res.ok) throw new Error('Failed to decline request')
       void loadDashboard()
     } catch (error) {
-      console.error('Error deleting request:', error)
+      console.error('Error declining request:', error)
     } finally {
       setRequestActionKey(null)
     }
@@ -292,9 +292,9 @@ export function ManageProjectsPage() {
                         size="sm"
                         variant="outline"
                         disabled={requestActionKey !== null}
-                        onClick={() => void handleDelete(req)}
+                        onClick={() => void handleDecline(req)}
                       >
-                        Delete
+                        Decline
                       </Button>
                     </div>
                   </div>

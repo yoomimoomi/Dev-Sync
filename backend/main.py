@@ -348,8 +348,8 @@ async def accept_application(
     return application
 
 
-@app.delete("/applications/{project_id}/{user_id}")
-async def delete_application(
+@app.patch("/applications/{project_id}/{user_id}/decline", response_model=ApplicationRead)
+async def decline_application(
     project_id: str,
     user_id: str,
     current_user: Annotated[Account, Depends(get_current_user)],
@@ -372,9 +372,10 @@ async def delete_application(
     if not application:
         raise HTTPException(status_code=404, detail="Application not found")
 
-    db.delete(application)
+    application.status = "Declined"
     db.commit()
-    return {"message": "Application deleted"}
+    db.refresh(application)
+    return application
 
 
 @app.post("/application", response_model=ApplicationRead)
