@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { ArrowLeft, Users, Calendar, MapPin } from 'lucide-react'
+import { ArrowLeft, Users, Calendar } from 'lucide-react'
 import { Navbar } from '@/components/navbar'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
@@ -104,27 +104,6 @@ export function ProjectPage() {
                 <div className="prose prose-sm max-w-none text-muted-foreground">
                   <h3 className="mt-0 font-semibold text-foreground">About This Project</h3>
                   <p>{project.description}</p>
-                  <p>
-                    This project is looking for passionate students who want to make a difference. We welcome contributors
-                    of all skill levels and are committed to providing mentorship and learning opportunities
-                    throughout the development process.
-                  </p>
-
-                  <h3 className="font-semibold text-foreground">What We&apos;re Building</h3>
-                  <ul>
-                    <li>User-friendly interface with modern design principles</li>
-                    <li>Scalable backend architecture</li>
-                    <li>Integration with third-party services and APIs</li>
-                    <li>Comprehensive testing and documentation</li>
-                  </ul>
-
-                  <h3 className="font-semibold text-foreground">Looking For</h3>
-                  <ul>
-                    <li>Frontend developers (React/Next.js experience preferred)</li>
-                    <li>Backend developers familiar with Node.js or Python</li>
-                    <li>UI/UX designers who can help improve the user experience</li>
-                    <li>Anyone interested in learning and contributing!</li>
-                  </ul>
                 </div>
               </CardContent>
             </Card>
@@ -165,13 +144,9 @@ export function ProjectPage() {
                   </div>
                   <div className="flex items-center gap-3 text-sm">
                     <Users className="h-4 w-4 text-muted-foreground" />
-                    <span className="text-muted-foreground">Team Size:</span>
-                    <span className="font-medium">1-4 members</span>
-                  </div>
-                  <div className="flex items-center gap-3 text-sm">
-                    <MapPin className="h-4 w-4 text-muted-foreground" />
-                    <span className="text-muted-foreground">Location:</span>
-                    <span className="font-medium">Remote</span>
+                    <span className="text-muted-foreground">
+                      {project.applicant_user_names.length} applicant{project.applicant_user_names.length !== 1 ? 's' : ''}
+                    </span>
                   </div>
                 </div>
                 <div className="mt-6 space-y-3">
@@ -211,7 +186,6 @@ export function ProjectPage() {
                   </Avatar>
                   <div>
                     <p className="font-medium">{project.owner.name}</p>
-                    <p className="text-sm text-muted-foreground">Computer Science, Senior</p>
                   </div>
                 </div>
               </CardContent>
