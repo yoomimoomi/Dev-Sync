@@ -207,6 +207,7 @@ async def create_user(user_in: AccountCreate, db: Session = Depends(get_db)):
 async def get_projects(db: Session = Depends(get_db)):
     projects = (
         db.query(Project)
+        .filter(Project.is_deleted == False)
         .options(
             selectinload(Project.owner),
             selectinload(Project.applications).selectinload(Application.user),
@@ -225,6 +226,7 @@ async def get_my_projects(
     projects = (
         db.query(Project)
         .filter(Project.user_id == current_user.user_id)
+        .filter(Project.is_deleted == False)
         .options(
             selectinload(Project.owner),
             selectinload(Project.applications).selectinload(Application.user),
@@ -240,6 +242,7 @@ async def get_project_by_id(project_id: str, db: Session = Depends(get_db)):
     project = (
         db.query(Project)
         .filter(Project.project_id == project_id)
+        .filter(Project.is_deleted == False)
         .options(
             selectinload(Project.owner),
             selectinload(Project.applications).selectinload(Application.user),
@@ -254,7 +257,17 @@ async def get_project_by_id(project_id: str, db: Session = Depends(get_db)):
 
 @app.get("/projects/user/{user_id}", response_model=list[ProjectRead])
 async def get_projects_by_user_id(user_id: str, db: Session = Depends(get_db)):
-    projects = db.query(Project).filter(Project.user_id == user_id).all()
+    projects = (
+        db.query(Project)
+    .filter(Project.user_id == user_id)
+    .filter(Project.is_deleted == False)
+    .options(
+        selectinload(Project.owner),
+        selectinload(Project.applications).selectinload(Application.user),
+        selectinload(Project.comments).selectinload(Comment.user),
+    )
+    .all()
+    )
     return projects
 
 
@@ -278,15 +291,16 @@ async def create_project(project_in: ProjectCreate, current_user: Annotated[Acco
     return new_project
 
 
-@app.delete("/project/{project_id}", status_code=204)
+@app.patch("/project/{project_id}", status_code=204)
 async def delete_project(project_id: str, current_user: Annotated[Account, Depends(get_current_user)], db: Session = Depends(get_db)):
     project = db.query(Project).filter(Project.project_id == project_id).first()
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
     if project.user_id != current_user.user_id:
         raise HTTPException(status_code=403, detail="You are not the owner of this project")
-    db.delete(project)
+    project.is_deleted = True
     db.commit()
+    db.refresh(project)
 
 
 @app.get("/applications/my-projects", response_model=list[ProjectOwnerView])
@@ -306,6 +320,7 @@ async def get_applications_to_my_projects(
         .join(Account, Account.user_id == Application.user_id)
         .join(Project, Project.project_id == Application.project_id)
         .filter(Project.user_id == current_user.user_id)
+        .filter(Project.is_deleted == False)
         .filter(Application.status == "Pending")
         .order_by(Application.created_at.desc())
         .all()
@@ -325,7 +340,13 @@ async def get_applications_to_my_projects(
 
 @app.get("/applications/user/{user_id}", response_model=list[ApplicationRead])
 async def get_applications_by_user_id(user_id: str, db: Session = Depends(get_db)):
-    applications = db.query(Application).filter(Application.user_id == user_id).all()
+    applications = (
+        db.query(Application)
+        .join(Project, Project.project_id == Application.project_id)
+        .filter(Application.user_id == user_id)
+        .filter(Project.is_deleted == False)
+        .all()
+    )
     return applications
 
 
@@ -336,7 +357,12 @@ async def accept_application(
     current_user: Annotated[Account, Depends(get_current_user)],
     db: Session = Depends(get_db),
 ):
-    project = db.query(Project).filter(Project.project_id == project_id).first()
+    project = (
+        db.query(Project)
+        .filter(Project.project_id == project_id)
+        .filter(Project.is_deleted == False)
+        .first()
+    )
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
     if project.user_id != current_user.user_id:
@@ -366,7 +392,12 @@ async def decline_application(
     current_user: Annotated[Account, Depends(get_current_user)],
     db: Session = Depends(get_db),
 ):
-    project = db.query(Project).filter(Project.project_id == project_id).first()
+    project = (
+        db.query(Project)
+        .filter(Project.project_id == project_id)
+        .filter(Project.is_deleted == False)
+        .first()
+    )
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
     if project.user_id != current_user.user_id:
@@ -410,6 +441,7 @@ async def create_application(
     project = (
         db.query(Project)
         .filter(Project.project_id == application_in.project_id)
+        .filter(Project.is_deleted == False)
         .first()
     )
     if not project:
@@ -453,7 +485,12 @@ async def create_comment(
     current_user: Annotated[Account, Depends(get_current_user)],
     db: Session = Depends(get_db),
 ):
-    project = db.query(Project).filter(Project.project_id == comment_in.project_id).first()
+    project = (
+        db.query(Project)
+        .filter(Project.project_id == comment_in.project_id)
+        .filter(Project.is_deleted == False)
+        .first()
+    )
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
 
