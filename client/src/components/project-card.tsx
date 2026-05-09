@@ -5,9 +5,10 @@ import { Card, CardContent } from "@/components/ui/card"
 
 export interface Project {
   project_id: string
-  owner: {
-    name: string
-  }
+  owner?: {
+    user_id?: string
+    name?: string
+  } | null
   title: string
   description: string
   status: string
@@ -52,6 +53,7 @@ function formatTimeAgo(input: string) {
 
 export function ProjectCard({ project }: ProjectCardProps) {
   const tags = [...project.roles, ...project.skills, ...project.technologies]
+  const ownerName = project.owner?.name?.trim() || 'Unknown'
 
   return (
     <Link to={`/project/${project.project_id}`} className="block">
@@ -60,13 +62,13 @@ export function ProjectCard({ project }: ProjectCardProps) {
           <div className="flex items-start justify-between gap-4">
             <div className="flex items-center gap-3">
               <Avatar className="h-10 w-10">
-                <AvatarImage src="" alt={project.owner.name} />
+                <AvatarImage src="" alt={ownerName} />
                 <AvatarFallback className="bg-muted text-muted-foreground">
-                  {project.owner.name.slice(0, 2).toUpperCase()}
+                  {ownerName.slice(0, 2).toUpperCase()}
                 </AvatarFallback>
               </Avatar>
               <div className="flex items-center gap-3 text-sm text-muted-foreground">
-                <span className="font-medium text-foreground">{project.owner.name}</span>
+                <span className="font-medium text-foreground">{ownerName}</span>
                 <span>{formatTimeAgo(project.created_at)}</span>
               </div>
             </div>

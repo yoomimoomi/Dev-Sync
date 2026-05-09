@@ -42,7 +42,8 @@ class Account(Base):
     # )
     applications: Mapped[list['Application']] = relationship('Application', back_populates='user')
     comments: Mapped[list['Comment']] = relationship('Comment', back_populates='user')
-    messages: Mapped[list['Message']] = relationship('Message', back_populates='user')
+    sent_messages: Mapped[list['Message']] = relationship('Message',foreign_keys='Message.sender_id', back_populates='sender')
+    received_messages: Mapped[list['Message']] = relationship('Message',foreign_keys='Message.receiver_id', back_populates='receiver')
 
 
 

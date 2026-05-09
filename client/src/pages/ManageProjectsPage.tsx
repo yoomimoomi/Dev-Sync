@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Plus, Settings, Trash2, Eye, Users } from 'lucide-react'
+import { MessageSquare, Plus, Settings, Trash2, Eye, Users } from 'lucide-react'
 import { AuthGuard } from '@/components/auth-guard'
 import { Navbar } from '@/components/navbar'
 import { type Project } from '@/components/project-card'
@@ -15,6 +15,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import { ApplicationChatDialog } from '@/components/application-chat-dialog'
 import {
   API_BASE_URL,
   APPLICATION_SUBMITTED_EVENT,
@@ -164,15 +165,17 @@ export function ManageProjectsPage() {
           </Card>
         ) : (
           <div className="space-y-4">
-            {projects.map((project) => (
+            {projects.map((project) => {
+              const ownerName = project.owner?.name?.trim() || 'Unknown'
+              return (
               <Card key={project.project_id} className="transition-all hover:shadow-md">
                 <CardHeader className="pb-3">
                   <div className="flex items-start justify-between">
                     <div className="flex items-center gap-4">
                       <Avatar className="h-10 w-10">
-                        <AvatarImage src="" alt={project.owner.name} />
+                        <AvatarImage src="" alt={ownerName} />
                         <AvatarFallback className="bg-primary text-primary-foreground">
-                          {project.owner.name.slice(0, 2).toUpperCase()}
+                          {ownerName.slice(0, 2).toUpperCase()}
                         </AvatarFallback>
                       </Avatar>
                       <div>
@@ -249,7 +252,7 @@ export function ManageProjectsPage() {
                   </div>
                 </CardContent>
               </Card>
-            ))}
+            )})}
           </div>
         )}
 
@@ -280,7 +283,18 @@ export function ManageProjectsPage() {
                         </p>
                       </div>
                     </div>
-                    <div className="flex gap-2">
+                    <div className="flex flex-wrap justify-end gap-2">
+                      <ApplicationChatDialog
+                        projectId={req.project_id}
+                        peerUserId={req.user_id}
+                        peerDisplayName={req.user_name}
+                        title={`Chat · ${req.project_title}`}
+                      >
+                        <Button size="sm" variant="secondary" type="button">
+                          <MessageSquare className="mr-2 h-4 w-4" />
+                          Message
+                        </Button>
+                      </ApplicationChatDialog>
                       <Button
                         size="sm"
                         disabled={requestActionKey !== null}

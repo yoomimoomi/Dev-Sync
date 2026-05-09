@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { type Project } from '@/components/project-card'
 import { CommentSection } from '@/components/comment-section'
+import { ApplicationChatDialog } from '@/components/application-chat-dialog'
 import { JoinRequestDialog } from '@/components/join-request-dialog'
 import { Button } from '@/components/ui/button'
 import type { Comment } from '@/lib/mock-data'
@@ -93,6 +94,9 @@ export function ProjectPage() {
     createdAt: comment.created_at ?? '',
   }))
 
+  const ownerName = project.owner?.name?.trim() || 'Unknown'
+  const ownerUserId = project.owner?.user_id
+
   return (
     <div className="min-h-screen bg-background">
       <Navbar />
@@ -134,13 +138,13 @@ export function ProjectPage() {
                 <div className="flex flex-wrap gap-4">
                   <div className="flex items-center gap-3">
                     <Avatar>
-                      <AvatarImage src="" alt={project.owner.name} />
+                      <AvatarImage src="" alt={ownerName} />
                       <AvatarFallback className="bg-primary text-primary-foreground">
-                        {project.owner.name.slice(0, 2).toUpperCase()}
+                        {ownerName.slice(0, 2).toUpperCase()}
                       </AvatarFallback>
                     </Avatar>
                     <div>
-                      <p className="text-sm font-medium">{project.owner.name}</p>
+                      <p className="text-sm font-medium">{ownerName}</p>
                       <p className="text-xs text-muted-foreground">Project Lead</p>
                     </div>
                   </div>
@@ -171,21 +175,28 @@ export function ProjectPage() {
                   <JoinRequestDialog
                     projectId={project.project_id}
                     projectTitle={project.title}
-                    projectOwner={project.owner.name}
+                    projectOwner={ownerName}
                   >
                     <Button type="button" className="w-full">
                       Request to Join
                     </Button>
                   </JoinRequestDialog>
-                  <JoinRequestDialog
-                    projectId={project.project_id}
-                    projectTitle={project.title}
-                    projectOwner={project.owner.name}
-                  >
-                    <Button type="button" variant="outline" className="w-full">
-                      Contact Owner
+                  {ownerUserId ? (
+                    <ApplicationChatDialog
+                      projectId={project.project_id}
+                      peerUserId={ownerUserId}
+                      peerDisplayName={ownerName}
+                      title={`Message ${ownerName}`}
+                    >
+                      <Button type="button" variant="outline" className="w-full">
+                        Message owner
+                      </Button>
+                    </ApplicationChatDialog>
+                  ) : (
+                    <Button type="button" variant="outline" className="w-full" disabled>
+                      Message owner
                     </Button>
-                  </JoinRequestDialog>
+                  )}
                 </div>
               </CardContent>
             </Card>
@@ -197,13 +208,13 @@ export function ProjectPage() {
               <CardContent>
                 <div className="flex items-center gap-3">
                   <Avatar className="h-12 w-12">
-                    <AvatarImage src="" alt={project.owner.name} />
+                    <AvatarImage src="" alt={ownerName} />
                     <AvatarFallback className="bg-primary text-primary-foreground">
-                      {project.owner.name.slice(0, 2).toUpperCase()}
+                      {ownerName.slice(0, 2).toUpperCase()}
                     </AvatarFallback>
                   </Avatar>
                   <div>
-                    <p className="font-medium">{project.owner.name}</p>
+                    <p className="font-medium">{ownerName}</p>
                   </div>
                 </div>
               </CardContent>

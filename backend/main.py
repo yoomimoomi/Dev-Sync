@@ -1,17 +1,21 @@
+import json
 import os
+from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
 from random import randrange
 from typing import Annotated
 from app.models.project import Project
 
 import jwt
-from fastapi import Depends, FastAPI, HTTPException, status
+from fastapi import Depends, FastAPI, HTTPException, status, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from jwt.exceptions import InvalidTokenError
+from starlette.websockets import WebSocketState
 from pydantic import BaseModel
 from pwdlib import PasswordHash
 from pwdlib.exceptions import UnknownHashError
+from sqlalchemy import func
 from sqlalchemy.orm import Session, selectinload
 
 from app.db.base import Base, engine, get_db
@@ -23,7 +27,14 @@ from app.schemas.account import AccountCreate, AccountRead
 from app.schemas.application import ApplicationCreate, ApplicationRead, ProjectOwnerView
 from app.schemas.comment import CommentCreate, CommentRead
 from app.schemas.projects import ProjectCreate, ProjectRead
-
+from app.schemas.message import MessageRead
+from app.models.message import Message
+from app.services.application_chat import (
+    MAX_MESSAGE_CONTENT_LEN,
+    assert_application_chat_allowed,
+    generate_message_id,
+    list_application_chat_messages,
+)
 
 ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "30"))
 SECRET_KEY = os.getenv("JWT_SECRET_KEY", "change-this-in-env")
@@ -32,8 +43,15 @@ ALGORITHM = "HS256"
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 password_hash = PasswordHash.recommended()
 
-Base.metadata.create_all(bind=engine)
-app = FastAPI(title="Devsync")
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    """Create tables after `app` exists so import errors never hide `app` from uvicorn."""
+    Base.metadata.create_all(bind=engine)
+    yield
+
+
+app = FastAPI(title="Devsync", lifespan=lifespan)
 app.include_router(router)
 
 app.add_middleware(
@@ -59,6 +77,61 @@ class PasswordVerifyRequest(BaseModel):
     hashed_password: str
 
 
+async def _ws_send_json_safe(ws: WebSocket, payload: dict) -> None:
+    """Send JSON only while Starlette considers the socket open; avoids uvicorn RuntimeError on dead ASGI links."""
+    if ws.application_state != WebSocketState.CONNECTED:
+        raise WebSocketDisconnect from None
+    try:
+        await ws.send_json(payload)
+    except Exception:
+        raise WebSocketDisconnect from None
+
+
+class ChatManager:
+    """In-memory registry of open WebSocket connections per user_id (multiple tabs supported)."""
+
+    def __init__(self) -> None:
+        self.active_connections: dict[str, list[WebSocket]] = {}
+
+    async def connect(self, user_id: str, websocket: WebSocket) -> None:
+        await websocket.accept()
+        self.active_connections.setdefault(user_id, []).append(websocket)
+
+    async def disconnect(self, user_id: str, websocket: WebSocket) -> None:
+        if user_id not in self.active_connections:
+            return
+        try:
+            self.active_connections[user_id].remove(websocket)
+        except ValueError:
+            return
+        if not self.active_connections[user_id]:
+            del self.active_connections[user_id]
+
+    async def send_personal_message(self, message: dict, receiver_id: str) -> None:
+        """Deliver to any registered sockets for receiver_id or its .strip() variant (CHAR padding)."""
+        for rid in {receiver_id, receiver_id.strip()}:
+            connections = self.active_connections.get(rid)
+            if not connections:
+                continue
+            for connection in list(connections):
+                if connection.application_state != WebSocketState.CONNECTED:
+                    try:
+                        await self.disconnect(rid, connection)
+                    except Exception:
+                        pass
+                    continue
+                try:
+                    await connection.send_json(message)
+                except Exception:
+                    try:
+                        await self.disconnect(rid, connection)
+                    except Exception:
+                        pass
+
+
+chat_manager = ChatManager()
+    
+    
 @app.get("/")
 async def root():
     return {"message": "Devsync in progress"}
@@ -121,7 +194,7 @@ async def login_for_access_token(
 
     access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = create_access_token(
-        data={"sub": user.user_id},
+        data={"sub": user.user_id.strip()},
         expires_delta=access_token_expires,
     )
     return Token(access_token=access_token, token_type="bearer")
@@ -139,7 +212,8 @@ def get_current_user(
 
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        user_id: str | None = payload.get("sub")
+        sub_raw = payload.get("sub")
+        user_id: str | None = sub_raw.strip() if isinstance(sub_raw, str) else None
         token_data = TokenData(user_id=user_id)
     except InvalidTokenError:
         raise credentials_exception
@@ -147,7 +221,7 @@ def get_current_user(
     if not token_data.user_id:
         raise credentials_exception
 
-    user = db.query(Account).filter(Account.user_id == token_data.user_id).first()
+    user = db.query(Account).filter(func.trim(Account.user_id) == token_data.user_id).first()
     if not user:
         raise credentials_exception
 
@@ -525,3 +599,140 @@ async def create_comment(
         .options(selectinload(Comment.user))
         .first()
     )
+
+
+def _http_exception_detail(exc: HTTPException) -> str:
+    if isinstance(exc.detail, str):
+        return exc.detail
+    return str(exc.detail)
+
+
+@app.get("/messages/application/{project_id}/{peer_user_id}", response_model=list[MessageRead])
+async def get_application_chat_messages(
+    project_id: str,
+    peer_user_id: str,
+    current_user: Annotated[Account, Depends(get_current_user)],
+    db: Session = Depends(get_db),
+    limit: int = 200,
+):
+    """Applicant ↔ owner DM history for a project (both participants must be allowed)."""
+    rows = list_application_chat_messages(
+        db,
+        project_id,
+        current_user.user_id,
+        peer_user_id,
+        limit=limit,
+    )
+    return rows
+
+
+# WebSocket protocol:
+# Client → server: JSON { "project_id", "receiver_id", "content" } (sender is the JWT subject).
+# Server → client: { "type": "application_message", "message_id", "project_id", "sender_id",
+#   "receiver_id", "content", "created_at" } to recipient and sender (ack echo).
+# Errors: { "type": "error", "detail": "..." }.
+
+
+@app.websocket("/ws/chat")
+async def websocket_chat(websocket: WebSocket, token: str, db: Session = Depends(get_db)):
+    try:
+        jwt_payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        sub = jwt_payload.get("sub")
+    except InvalidTokenError:
+        await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+        return
+    except Exception:
+        await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+        return
+    if not isinstance(sub, str) or not sub.strip():
+        await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+        return
+    user_id = sub.strip()
+    await chat_manager.connect(user_id, websocket)
+    try:
+        while True:
+            try:
+                data = await websocket.receive_json()
+            except WebSocketDisconnect:
+                raise
+            except json.JSONDecodeError:
+                await _ws_send_json_safe(websocket, {"type": "error", "detail": "Invalid JSON"})
+                continue
+            except Exception:
+                await _ws_send_json_safe(websocket, {"type": "error", "detail": "Invalid message payload"})
+                continue
+
+            if not isinstance(data, dict):
+                await _ws_send_json_safe(websocket, {"type": "error", "detail": "Message must be a JSON object"})
+                continue
+
+            project_id = data.get("project_id")
+            receiver_id = data.get("receiver_id")
+            content_raw = data.get("content")
+
+            if not isinstance(project_id, str) or not isinstance(receiver_id, str):
+                await _ws_send_json_safe(
+                    websocket,
+                    {"type": "error", "detail": "project_id and receiver_id must be strings"},
+                )
+                continue
+            project_id = project_id.strip()
+            receiver_id = receiver_id.strip()
+            if not isinstance(content_raw, str):
+                await _ws_send_json_safe(websocket, {"type": "error", "detail": "content must be a string"})
+                continue
+
+            text = content_raw.strip()
+            if not text:
+                await _ws_send_json_safe(websocket, {"type": "error", "detail": "content cannot be empty"})
+                continue
+            if len(text) > MAX_MESSAGE_CONTENT_LEN:
+                await _ws_send_json_safe(
+                    websocket,
+                    {"type": "error", "detail": f"content exceeds {MAX_MESSAGE_CONTENT_LEN} characters"},
+                )
+                continue
+
+            try:
+                assert_application_chat_allowed(db, project_id, user_id, receiver_id)
+            except HTTPException as exc:
+                await _ws_send_json_safe(
+                    websocket,
+                    {"type": "error", "detail": _http_exception_detail(exc)},
+                )
+                continue
+
+            new_msg = Message(
+                message_id=generate_message_id(db),
+                project_id=project_id,
+                sender_id=user_id,
+                receiver_id=receiver_id,
+                content=text,
+            )
+            db.add(new_msg)
+            try:
+                db.commit()
+                db.refresh(new_msg)
+            except Exception:
+                db.rollback()
+                await _ws_send_json_safe(websocket, {"type": "error", "detail": "Could not save message"})
+                continue
+
+            created_at = new_msg.created_at
+            created_str = created_at.isoformat() if created_at else ""
+
+            outbound = {
+                "type": "application_message",
+                "message_id": new_msg.message_id,
+                "project_id": new_msg.project_id,
+                "sender_id": new_msg.sender_id,
+                "receiver_id": new_msg.receiver_id,
+                "content": new_msg.content,
+                "is_read": new_msg.is_read,
+                "created_at": created_str,
+            }
+            await chat_manager.send_personal_message(outbound, receiver_id)
+            await chat_manager.send_personal_message(outbound, user_id)
+
+    except WebSocketDisconnect:
+        await chat_manager.disconnect(user_id, websocket)
