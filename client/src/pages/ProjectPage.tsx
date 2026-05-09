@@ -13,6 +13,24 @@ import type { Comment } from '@/lib/mock-data'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000'
 
+function formatTimeAgo(input: string) {
+  const date = new Date(input)
+  if (Number.isNaN(date.getTime())) return input
+
+  const diffMs = Math.max(0, Date.now() - date.getTime())
+
+  const minute = 60 * 1000
+  const hour = 60 * minute
+  const day = 24 * hour
+  const week = 7 * day
+
+  if (diffMs < minute) return 'just now'
+  if (diffMs < hour) return `${Math.floor(diffMs / minute)}m`
+  if (diffMs < day) return `${Math.floor(diffMs / hour)}h`
+  if (diffMs < week) return `${Math.floor(diffMs / day)}d`
+  return `${Math.floor(diffMs / week)}w`
+}
+
 export function ProjectPage() {
   const { id = '' } = useParams()
   const [project, setProject] = useState<Project | null>(null)
@@ -140,7 +158,7 @@ export function ProjectPage() {
                   <div className="flex items-center gap-3 text-sm">
                     <Calendar className="h-4 w-4 text-muted-foreground" />
                     <span className="text-muted-foreground">Posted:</span>
-                    <span className="font-medium">{project.created_at}</span>
+                    <span className="font-medium">{formatTimeAgo(project.created_at)}</span>
                   </div>
                   <div className="flex items-center gap-3 text-sm">
                     <Users className="h-4 w-4 text-muted-foreground" />
