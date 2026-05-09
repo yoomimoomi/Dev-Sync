@@ -19,7 +19,7 @@ from app.models.account import Account
 from app.models.application import Application
 from app.models.comment import Comment
 from app.routes import router
-from app.schemas.account import AccountCreate, AccountRead
+from app.schemas.account import AccountCreate, AccountRead, AccountUpdate
 from app.schemas.application import ApplicationCreate, ApplicationRead, ProjectOwnerView
 from app.schemas.comment import CommentCreate, CommentRead
 from app.schemas.projects import ProjectCreate, ProjectRead
@@ -156,6 +156,30 @@ def get_current_user(
 
 @app.get("/user/me", response_model=AccountRead)
 async def get_me(current_user: Annotated[Account, Depends(get_current_user)]):
+    return current_user
+
+
+@app.patch("/user/me", response_model=AccountRead)
+async def update_me(
+    update: AccountUpdate,
+    current_user: Annotated[Account, Depends(get_current_user)],
+    db: Session = Depends(get_db),
+):
+    if update.name is not None:
+        current_user.name = update.name
+    if update.email is not None:
+        conflict = (
+            db.query(Account)
+            .filter(Account.email == update.email, Account.user_id != current_user.user_id)
+            .first()
+        )
+        if conflict:
+            raise HTTPException(status_code=400, detail="Email already in use")
+        current_user.email = update.email
+    if update.grade is not None:
+        current_user.grade = update.grade
+    db.commit()
+    db.refresh(current_user)
     return current_user
 
 

@@ -16,6 +16,12 @@ class AccountCreate(BaseModel):
 
 
 
+class AccountUpdate(BaseModel):
+    name: Optional[str] = Field(None, max_length=50)
+    email: Optional[EmailStr] = None
+    grade: Optional[str] = Field(None, max_length=9)
+
+
 class AccountRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
