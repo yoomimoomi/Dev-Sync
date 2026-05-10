@@ -1,3 +1,0 @@
-{
-  "detail": "(sqlite3.OperationalError) no such table: accounts\n[SQL: SELECT count(*) AS count_1 \nFROM (SELECT accounts.user_id AS accounts_user_id, accounts.username AS accounts_username, accounts.hashed_password AS accounts_hashed_password, accounts.grade AS accounts_grade, accounts.roles AS accounts_roles, accounts.skills AS accounts_skills, accounts.technologies AS accounts_technologies, accounts.notifications AS accounts_notifications, accounts.comments AS accounts_comments, accounts.projects AS accounts_projects \nFROM accounts) AS anon_1]\n(Background on this error at: https://sqlalche.me/e/20/e3q8)"
-}
