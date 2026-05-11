@@ -5,7 +5,7 @@ from typing import Annotated
 from app.models.project import Project
 
 import jwt
-from fastapi import Depends, FastAPI, HTTPException, status
+from fastapi import Depends, FastAPI, File, HTTPException, UploadFile, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from jwt.exceptions import InvalidTokenError
@@ -19,6 +19,7 @@ from app.models.account import Account
 from app.models.application import Application
 from app.models.comment import Comment
 from app.routes import router
+from app.supabase_bucket_storage import upload_avatar
 from app.schemas.account import AccountCreate, AccountRead, AccountUpdate
 from app.schemas.application import ApplicationCreate, ApplicationRead, ProjectOwnerView
 from app.schemas.comment import CommentCreate, CommentRead
@@ -57,6 +58,10 @@ class TokenData(BaseModel):
 class PasswordVerifyRequest(BaseModel):
     password: str
     hashed_password: str
+
+
+_AVATAR_MAX_BYTES = 5 * 1024 * 1024
+_AVATAR_ALLOWED_TYPES = frozenset({"image/jpeg", "image/png", "image/webp", "image/gif"})
 
 
 @app.get("/")
@@ -183,6 +188,35 @@ async def update_me(
     db.commit()
     db.refresh(current_user)
     return current_user
+
+
+@app.post("/user/me/avatar")
+async def upload_my_avatar(
+    current_user: Annotated[Account, Depends(get_current_user)],
+    db: Session = Depends(get_db),
+    file: UploadFile = File(...),
+):
+    if not file.content_type or file.content_type not in _AVATAR_ALLOWED_TYPES:
+        raise HTTPException(
+            status_code=400,
+            detail="File must be an image (jpeg, png, webp, or gif)",
+        )
+    data = await file.read()
+    if len(data) > _AVATAR_MAX_BYTES:
+        raise HTTPException(status_code=400, detail="Image must be 5MB or smaller")
+    try:
+        avatar_path = upload_avatar(
+            current_user.user_id,
+            data,
+            file.content_type,
+        )
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+    current_user.avatar_path = avatar_path
+    db.commit()
+    db.refresh(current_user)
+    return avatar_path
 
 
 @app.get("/auth/test-jwt")
