@@ -24,7 +24,7 @@ import { Mail, Calendar, Edit, User, Camera } from 'lucide-react'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000'
 const TOKEN_STORAGE_KEY = 'devsync_access_token'
-const AVATAR_STORAGE_PREFIX = 'devsync_avatar_'
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL ?? 'https://mdacciknqnhpqswwishp.supabase.co'
 
 const GRADE_OPTIONS = ['Freshman', 'Sophomore', 'Junior', 'Senior', 'Graduate']
 
@@ -36,6 +36,7 @@ type Profile = {
   roles: string[]
   skills: string[]
   technologies: string[]
+  avatar_path?: string | null
 }
 
 function initials(name: string) {
@@ -48,12 +49,21 @@ function initials(name: string) {
     .toUpperCase()
 }
 
-function getStoredAvatar(userId: string): string | null {
-  return localStorage.getItem(`${AVATAR_STORAGE_PREFIX}${userId}`)
-}
-
-function saveStoredAvatar(userId: string, dataUrl: string) {
-  localStorage.setItem(`${AVATAR_STORAGE_PREFIX}${userId}`, dataUrl)
+async function uploadAvatar(token: string, file: File): Promise<string> {
+  const form = new FormData()
+  form.append('file', file)
+  const res = await fetch(`${API_BASE_URL}/user/me/avatar`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}` },
+    body: form,
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    const detail = typeof err.detail === 'string' ? err.detail : JSON.stringify(err.detail ?? err)
+    throw new Error(detail || `Upload failed (${res.status})`)
+  }
+  const data = await res.json()
+  return data as string
 }
 
 export function ProfilePage() {
@@ -96,7 +106,11 @@ export function ProfilePage() {
 
         setProfile(profileData)
         setProjects(projectData)
-        setAvatarUrl(getStoredAvatar(profileData.user_id))
+        setAvatarUrl(
+          profileData.avatar_path
+            ? `${SUPABASE_URL}/storage/v1/object/public/${profileData.avatar_path}`
+            : null
+        )
       } catch (error) {
         console.error('Error fetching profile page data:', error)
       }
@@ -159,9 +173,10 @@ export function ProfilePage() {
         setProfile(updated)
       }
 
-      if (pictureFile && picturePreview) {
-        saveStoredAvatar(profile.user_id, picturePreview)
-        setAvatarUrl(picturePreview)
+      if (pictureFile && token) {
+        const avatarPath= await uploadAvatar(token, pictureFile)
+        setAvatarUrl(`${SUPABASE_URL}/storage/v1/object/public/${avatarPath}`)
+        setProfile((prev) => (prev ? { ...prev, avatar_path: avatarPath } : prev))
       }
 
       setEditOpen(false)
@@ -185,7 +200,12 @@ export function ProfilePage() {
                 <div className="flex flex-col items-center text-center">
                   <div className="relative flex h-24 w-24 items-center justify-center rounded-full bg-primary/10 text-4xl font-bold text-primary overflow-hidden">
                     {avatarUrl ? (
-                      <img src={avatarUrl} alt="Profile" className="h-full w-full object-cover" />
+                      <img
+                        src={avatarUrl}
+                        alt="Profile"
+                        className="h-full w-full object-cover"
+                        onError={() => setAvatarUrl(null)}
+                      />
                     ) : (
                       profile ? initials(profile.name) : '??'
                     )}
