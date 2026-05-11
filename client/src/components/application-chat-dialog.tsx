@@ -21,10 +21,10 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 import { Textarea } from '@/components/ui/textarea'
 import {
   API_BASE_URL,
-  getWebSocketBaseUrl,
   readApiErrorMessage,
   TOKEN_STORAGE_KEY,
 } from '@/lib/api-config'
+import { useChatRealtime } from '@/lib/chat-realtime-context'
 import { useAuth } from '@/lib/auth-context'
 
 export type ApplicationChatRow = {
@@ -34,6 +34,7 @@ export type ApplicationChatRow = {
   receiver_id?: string | null
   content?: string | null
   created_at?: string | null
+  is_read?: boolean | null
 }
 
 interface ApplicationChatDialogProps {
@@ -70,15 +71,20 @@ export function ApplicationChatDialog({
   children,
 }: ApplicationChatDialogProps) {
   const { isAuthenticated, user } = useAuth()
+  const { ready: wsReady, subscribe, getSocket } = useChatRealtime()
   const [open, setOpen] = useState(false)
   const [messages, setMessages] = useState<ApplicationChatRow[]>([])
   const [loadError, setLoadError] = useState<string | null>(null)
   const [sendError, setSendError] = useState<string | null>(null)
   const [draft, setDraft] = useState('')
-  const [wsReady, setWsReady] = useState(false)
   const [historyLoaded, setHistoryLoaded] = useState(false)
-  const wsRef = useRef<WebSocket | null>(null)
   const bottomRef = useRef<HTMLDivElement | null>(null)
+  const projectIdRef = useRef(projectId)
+  const peerUserIdRef = useRef(peerUserId)
+  projectIdRef.current = projectId
+  peerUserIdRef.current = peerUserId
+  const userRef = useRef(user)
+  userRef.current = user
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -86,9 +92,6 @@ export function ApplicationChatDialog({
 
   useEffect(() => {
     if (!open || !isAuthenticated || !user?.id) {
-      wsRef.current?.close()
-      wsRef.current = null
-      setWsReady(false)
       setHistoryLoaded(false)
       setMessages([])
       setLoadError(null)
@@ -104,11 +107,10 @@ export function ApplicationChatDialog({
 
     let cancelled = false
 
-    const connect = async () => {
+    ;(async () => {
       setLoadError(null)
       setSendError(null)
       setHistoryLoaded(false)
-      setWsReady(false)
 
       try {
         const res = await fetch(
@@ -124,71 +126,71 @@ export function ApplicationChatDialog({
         if (cancelled) return
         setMessages(Array.isArray(data) ? data : [])
         setHistoryLoaded(true)
+
+        const sock = getSocket()
+        if (sock?.readyState === WebSocket.OPEN) {
+          sock.send(
+            JSON.stringify({
+              type: 'mark_read',
+              project_id: projectId,
+              peer_user_id: peerUserId,
+            }),
+          )
+        }
       } catch {
         if (!cancelled) {
           setLoadError('Failed to load messages.')
           setHistoryLoaded(true)
         }
-        return
       }
-
-      if (cancelled) return
-
-      const wsUrl = `${getWebSocketBaseUrl()}/ws/chat?token=${encodeURIComponent(token)}`
-      const ws = new WebSocket(wsUrl)
-      wsRef.current = ws
-
-      ws.onopen = () => {
-        if (!cancelled) setWsReady(true)
-      }
-
-      ws.onmessage = (ev) => {
-        try {
-          const raw = JSON.parse(ev.data as string) as unknown
-          if (
-            typeof raw === 'object' &&
-            raw !== null &&
-            (raw as { type?: string }).type === 'error'
-          ) {
-            const detail = (raw as { detail?: unknown }).detail
-            setSendError(typeof detail === 'string' ? detail : String(detail))
-            return
-          }
-          if (
-            typeof raw === 'object' &&
-            raw !== null &&
-            (raw as { type?: string }).type === 'application_message'
-          ) {
-            const msg = raw as ApplicationChatRow & { type?: string }
-            if (!user?.id) return
-            if (!appliesToThread(msg, projectId, user.id, peerUserId)) return
-            setMessages((prev) => {
-              if (prev.some((m) => m.message_id === msg.message_id)) return prev
-              return [...prev, msg]
-            })
-          }
-        } catch {
-          // ignore malformed frames
-        }
-      }
-
-      ws.onerror = () => {
-        if (!cancelled) setSendError('WebSocket connection error.')
-      }
-
-      ws.onclose = () => {
-        if (!cancelled) setWsReady(false)
-      }
-    }
-
-    void connect()
+    })()
 
     return () => {
       cancelled = true
-      wsRef.current?.close()
-      wsRef.current = null
     }
-  }, [open, isAuthenticated, user?.id, projectId, peerUserId])
+  }, [open, isAuthenticated, user?.id, projectId, peerUserId, getSocket])
+
+  useEffect(() => {
+    if (!open || !isAuthenticated || !user?.id) return
+    return subscribe((raw) => {
+      if (typeof raw !== 'object' || raw === null) return
+      const type = (raw as { type?: string }).type
+      if (type === 'error') {
+        const detail = (raw as { detail?: unknown }).detail
+        setSendError(typeof detail === 'string' ? detail : String(detail))
+        return
+      }
+      if (type === 'application_message') {
+        const pid = projectIdRef.current
+        const peer = peerUserIdRef.current
+        const u = userRef.current
+        if (!u?.id) return
+        const msg = raw as ApplicationChatRow & { type?: string }
+        if (!appliesToThread(msg, pid, u.id, peer)) return
+        setMessages((prev) => {
+          if (prev.some((m) => m.message_id === msg.message_id)) return prev
+          return [...prev, msg]
+        })
+        return
+      }
+      if (type === 'read_receipt') {
+        const r = raw as {
+          project_id?: string | null
+          peer_user_id?: string | null
+          message_ids?: string[]
+        }
+        if (trimId(r.project_id) !== trimId(projectIdRef.current)) return
+        if (trimId(r.peer_user_id) !== trimId(peerUserIdRef.current)) return
+        const ids = new Set((r.message_ids ?? []).map((id) => trimId(id)))
+        if (ids.size === 0) return
+        setMessages((prev) =>
+          prev.map((m) =>
+            ids.has(trimId(m.message_id)) ? { ...m, is_read: true } : m,
+          ),
+        )
+      }
+    })
+  }, [open, isAuthenticated, user?.id, subscribe])
 
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault()
@@ -196,7 +198,7 @@ export function ApplicationChatDialog({
     const trimmed = draft.trim()
     if (!trimmed) return
 
-    const ws = wsRef.current
+    const ws = getSocket()
     if (!ws || ws.readyState !== WebSocket.OPEN) {
       setSendError('Not connected. Wait for the connection or refresh.')
       return

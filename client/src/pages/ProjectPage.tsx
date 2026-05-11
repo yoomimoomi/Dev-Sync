@@ -96,6 +96,7 @@ export function ProjectPage() {
 
   const ownerName = project.owner?.name?.trim() || 'Unknown'
   const ownerUserId = project.owner?.user_id
+  const acceptedMembers = project.accepted_team_members ?? []
 
   return (
     <div className="min-h-screen bg-background">
@@ -148,6 +149,23 @@ export function ProjectPage() {
                       <p className="text-xs text-muted-foreground">Project Lead</p>
                     </div>
                   </div>
+                  {acceptedMembers.map((member) => {
+                    const display = member.name?.trim() || member.email?.trim() || 'Member'
+                    return (
+                      <div key={member.user_id} className="flex items-center gap-3">
+                        <Avatar>
+                          <AvatarImage src="" alt={display} />
+                          <AvatarFallback className="bg-muted text-muted-foreground">
+                            {display.slice(0, 2).toUpperCase()}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div>
+                          <p className="text-sm font-medium">{display}</p>
+                          <p className="text-xs text-muted-foreground">Team member</p>
+                        </div>
+                      </div>
+                    )
+                  })}
                 </div>
               </CardContent>
             </Card>

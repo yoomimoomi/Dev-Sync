@@ -1,4 +1,5 @@
 import json
+import logging
 import os
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
@@ -15,7 +16,7 @@ from starlette.websockets import WebSocketState
 from pydantic import BaseModel
 from pwdlib import PasswordHash
 from pwdlib.exceptions import UnknownHashError
-from sqlalchemy import func
+from sqlalchemy import func, text
 from sqlalchemy.orm import Session, selectinload
 
 from app.db.base import Base, engine, get_db
@@ -27,13 +28,23 @@ from app.schemas.account import AccountCreate, AccountRead
 from app.schemas.application import ApplicationCreate, ApplicationRead, ProjectOwnerView
 from app.schemas.comment import CommentCreate, CommentRead
 from app.schemas.projects import ProjectCreate, ProjectRead
-from app.schemas.message import MessageRead, ConversationRead
+from app.models.notifcation import Notification
+from app.schemas.message import ConversationRead, MarkThreadReadResult, MessageRead
+from app.schemas.notification import NotificationRead, NotificationsMarkReadBody
 from app.models.message import Message
 from app.services.application_chat import (
     MAX_MESSAGE_CONTENT_LEN,
     assert_application_chat_allowed,
     generate_message_id,
     list_application_chat_messages,
+    mark_thread_messages_read,
+)
+from app.services.notifications import (
+    create_chat_message_notification,
+    create_join_request_notification,
+    list_notifications_for_user,
+    mark_notifications_read,
+    sender_display_name,
 )
 
 ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "30"))
@@ -42,12 +53,24 @@ ALGORITHM = "HS256"
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 password_hash = PasswordHash.recommended()
+logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     """Create tables after `app` exists so import errors never hide `app` from uvicorn."""
     Base.metadata.create_all(bind=engine)
+    # create_all does not add new columns to existing tables; ensure notification.read exists (PostgreSQL).
+    if engine.dialect.name == "postgresql":
+        try:
+            with engine.begin() as conn:
+                conn.execute(
+                    text(
+                        'ALTER TABLE notifications ADD COLUMN IF NOT EXISTS "read" boolean NOT NULL DEFAULT false'
+                    )
+                )
+        except Exception as exc:
+            logger.warning("Could not ensure notifications.read column: %s", exc)
     yield
 
 
@@ -107,8 +130,12 @@ class ChatManager:
         if not self.active_connections[user_id]:
             del self.active_connections[user_id]
 
-    async def send_personal_message(self, message: dict, receiver_id: str) -> None:
-        """Deliver to any registered sockets for receiver_id or its .strip() variant (CHAR padding)."""
+    async def send_personal_message(self, message: dict, receiver_id: str) -> bool:
+        """Deliver to any registered sockets for receiver_id or its .strip() variant (CHAR padding).
+
+        Returns True if at least one active connection received the payload (WhatsApp-style delivered).
+        """
+        delivered_any = False
         for rid in {receiver_id, receiver_id.strip()}:
             connections = self.active_connections.get(rid)
             if not connections:
@@ -122,11 +149,13 @@ class ChatManager:
                     continue
                 try:
                     await connection.send_json(message)
+                    delivered_any = True
                 except Exception:
                     try:
                         await self.disconnect(rid, connection)
                     except Exception:
                         pass
+        return delivered_any
 
 
 chat_manager = ChatManager()
@@ -550,6 +579,59 @@ async def create_application(
     db.add(new_application)
     db.commit()
     db.refresh(new_application)
+
+    owner_trim = (project.user_id or "").strip()
+    if not owner_trim:
+        logger.warning("Join notification skipped: project %s has no owner user_id", project.project_id)
+        return new_application
+
+    owner_row = (
+        db.query(Account)
+        .filter(func.trim(Account.user_id) == owner_trim)
+        .first()
+    )
+    if not owner_row:
+        logger.warning(
+            "Join notification skipped: no account row for owner trim=%r project=%s",
+            owner_trim,
+            project.project_id,
+        )
+        return new_application
+
+    owner_ws_id = (owner_row.user_id or "").strip()
+    project_fk_id = (project.project_id or "").strip()
+
+    try:
+        jn = create_join_request_notification(
+            db,
+            owner_id=owner_row.user_id,
+            project_id=project_fk_id,
+            project_title=project.title or "",
+            applicant_display_name=(current_user.name or "").strip() or current_user.user_id.strip(),
+            application_preview=new_application.content or "",
+        )
+        if jn is None:
+            logger.warning("Join notification not created (empty ids?) project=%s", project.project_id)
+        else:
+            db.commit()
+            db.refresh(jn)
+            ca = jn.created_at
+            created_str_j = ca.isoformat() if ca else ""
+            nid = (jn.notification_id or "").strip()
+            notif_app = {
+                "type": "notification",
+                "id": nid,
+                "project_id": (jn.project_id or "").strip(),
+                "title": jn.title,
+                "content": jn.content,
+                "read": bool(jn.read),
+                "created_at": created_str_j,
+            }
+            await chat_manager.send_personal_message(notif_app, owner_ws_id)
+    except Exception:
+        logger.exception("Join request notification failed for project=%s owner=%s", project_fk_id, owner_ws_id)
+        db.rollback()
+
     return new_application
 
 
@@ -669,9 +751,9 @@ async def get_my_conversations(
         result.append(
             ConversationRead(
                 project_id=pid,
-                project_title=project.title,
+                project_title=project.title or "",
                 peer_user_id=peer_id,
-                peer_name=peer.name,
+                peer_name=peer.name or "",
                 last_message=msg.content,
                 last_message_at=msg.created_at,
             )
@@ -680,10 +762,81 @@ async def get_my_conversations(
     return result
 
 
+@app.post(
+    "/messages/application/{project_id}/{peer_user_id}/read",
+    response_model=MarkThreadReadResult,
+)
+async def mark_application_thread_read(
+    project_id: str,
+    peer_user_id: str,
+    current_user: Annotated[Account, Depends(get_current_user)],
+    db: Session = Depends(get_db),
+):
+    """Mark all inbound messages in this thread as read (current user is receiver)."""
+    try:
+        ids = mark_thread_messages_read(
+            db,
+            project_id,
+            current_user.user_id,
+            peer_user_id,
+        )
+        db.commit()
+    except HTTPException:
+        db.rollback()
+        raise
+    except Exception:
+        db.rollback()
+        raise HTTPException(status_code=500, detail="Could not update read state")
+    return MarkThreadReadResult(updated_message_ids=ids)
+
+
+def _notification_to_read(n: Notification) -> NotificationRead:
+    pid = (n.project_id or "").strip()
+    ca = n.created_at
+    return NotificationRead(
+        id=(n.notification_id or "").strip(),
+        project_id=pid,
+        title=n.title,
+        content=n.content,
+        read=bool(n.read),
+        created_at=ca,
+    )
+
+
+@app.get("/notifications", response_model=list[NotificationRead])
+async def get_my_notifications(
+    current_user: Annotated[Account, Depends(get_current_user)],
+    db: Session = Depends(get_db),
+    limit: int = 100,
+):
+    rows = list_notifications_for_user(db, current_user.user_id, limit=limit)
+    return [_notification_to_read(r) for r in rows]
+
+
+@app.patch("/notifications/read", response_model=dict)
+async def patch_notifications_read(
+    body: NotificationsMarkReadBody,
+    current_user: Annotated[Account, Depends(get_current_user)],
+    db: Session = Depends(get_db),
+):
+    try:
+        n = mark_notifications_read(db, current_user.user_id, body.ids)
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise HTTPException(status_code=500, detail="Could not update notifications")
+    return {"updated": n}
+
+
 # WebSocket protocol:
-# Client → server: JSON { "project_id", "receiver_id", "content" } (sender is the JWT subject).
+# Client → server (send DM): JSON { "project_id", "receiver_id", "content" } (no "type"; sender = JWT sub).
+# Client → server (read receipts): JSON { "type": "mark_read", "project_id", "peer_user_id" }.
 # Server → client: { "type": "application_message", "message_id", "project_id", "sender_id",
-#   "receiver_id", "content", "created_at" } to recipient and sender (ack echo).
+#   "receiver_id", "content", "is_read", "created_at" } to recipient and sender (ack echo).
+# Server → client (sender only, after a send): { "type": "message_receipt", "message_id", "project_id",
+#   "peer_user_id", "delivered", "read" } — delivered=true if peer had an active WS (like a grey tick); read from DB.
+# Server → client: { "type": "read_receipt", "project_id", "peer_user_id", "message_ids", "read": true }.
+# Server → client: { "type": "notification", "id", "project_id", "title", "content", "read", "created_at" }.
 # Errors: { "type": "error", "detail": "..." }.
 
 
@@ -718,6 +871,46 @@ async def websocket_chat(websocket: WebSocket, token: str, db: Session = Depends
 
             if not isinstance(data, dict):
                 await _ws_send_json_safe(websocket, {"type": "error", "detail": "Message must be a JSON object"})
+                continue
+
+            if data.get("type") == "mark_read":
+                pid_raw = data.get("project_id")
+                peer_raw = data.get("peer_user_id")
+                if not isinstance(pid_raw, str) or not isinstance(peer_raw, str):
+                    await _ws_send_json_safe(
+                        websocket,
+                        {"type": "error", "detail": "project_id and peer_user_id must be strings"},
+                    )
+                    continue
+                pid = pid_raw.strip()
+                peer = peer_raw.strip()
+                try:
+                    updated_ids = mark_thread_messages_read(db, pid, user_id, peer)
+                    db.commit()
+                except HTTPException as exc:
+                    db.rollback()
+                    await _ws_send_json_safe(
+                        websocket,
+                        {"type": "error", "detail": _http_exception_detail(exc)},
+                    )
+                    continue
+                except Exception:
+                    db.rollback()
+                    await _ws_send_json_safe(
+                        websocket,
+                        {"type": "error", "detail": "Could not update read state"},
+                    )
+                    continue
+
+                receipt = {
+                    "type": "read_receipt",
+                    "project_id": pid,
+                    "peer_user_id": peer,
+                    "message_ids": updated_ids,
+                    "read": True,
+                }
+                await chat_manager.send_personal_message(receipt, user_id)
+                await chat_manager.send_personal_message(receipt, peer)
                 continue
 
             project_id = data.get("project_id")
@@ -785,8 +978,47 @@ async def websocket_chat(websocket: WebSocket, token: str, db: Session = Depends
                 "is_read": new_msg.is_read,
                 "created_at": created_str,
             }
-            await chat_manager.send_personal_message(outbound, receiver_id)
+            peer_online = await chat_manager.send_personal_message(outbound, receiver_id)
             await chat_manager.send_personal_message(outbound, user_id)
+            await chat_manager.send_personal_message(
+                {
+                    "type": "message_receipt",
+                    "message_id": (new_msg.message_id or "").strip(),
+                    "project_id": project_id,
+                    "peer_user_id": receiver_id,
+                    "delivered": peer_online,
+                    "read": bool(new_msg.is_read),
+                },
+                user_id,
+            )
+
+            try:
+                sname = sender_display_name(db, user_id)
+                n = create_chat_message_notification(
+                    db,
+                    receiver_id=receiver_id,
+                    project_id=project_id,
+                    sender_display_name=sname,
+                    message_preview=text,
+                )
+                if n is not None:
+                    db.commit()
+                    db.refresh(n)
+                    ca = n.created_at
+                    created_str_n = ca.isoformat() if ca else ""
+                    nid = (n.notification_id or "").strip()
+                    notif_out = {
+                        "type": "notification",
+                        "id": nid,
+                        "project_id": (n.project_id or "").strip(),
+                        "title": n.title,
+                        "content": n.content,
+                        "read": bool(n.read),
+                        "created_at": created_str_n,
+                    }
+                    await chat_manager.send_personal_message(notif_out, receiver_id)
+            except Exception:
+                db.rollback()
 
     except WebSocketDisconnect:
         await chat_manager.disconnect(user_id, websocket)

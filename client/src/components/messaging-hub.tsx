@@ -13,12 +13,12 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 import { Textarea } from '@/components/ui/textarea'
 import {
   API_BASE_URL,
-  getWebSocketBaseUrl,
   OPEN_CHAT_EVENT,
   type OpenChatPayload,
   readApiErrorMessage,
   TOKEN_STORAGE_KEY,
 } from '@/lib/api-config'
+import { useChatRealtime } from '@/lib/chat-realtime-context'
 import { useAuth } from '@/lib/auth-context'
 import type { ApplicationChatRow } from '@/components/application-chat-dialog'
 
@@ -79,6 +79,7 @@ function formatTime(iso: string | null | undefined): string {
 
 export function MessagingHub() {
   const { isAuthenticated, user } = useAuth()
+  const { ready: wsReady, subscribe, getSocket } = useChatRealtime()
 
   const [isOpen, setIsOpen] = useState(false)
   const [view, setView] = useState<'list' | 'chat'>('list')
@@ -95,10 +96,11 @@ export function MessagingHub() {
   const [loadError, setLoadError] = useState<string | null>(null)
   const [sendError, setSendError] = useState<string | null>(null)
   const [draft, setDraft] = useState('')
-  const [wsReady, setWsReady] = useState(false)
 
-  const wsRef = useRef<WebSocket | null>(null)
   const bottomRef = useRef<HTMLDivElement | null>(null)
+  const activeConvRef = useRef<ConversationRow | null>(null)
+  const userRef = useRef(user)
+  const debounceConvRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -134,6 +136,65 @@ export function MessagingHub() {
     }
   }, [isOpen, view, isAuthenticated, fetchConversations])
 
+  activeConvRef.current = activeConv
+  userRef.current = user
+
+  const debouncedFetchConversations = useCallback(() => {
+    if (debounceConvRef.current) clearTimeout(debounceConvRef.current)
+    debounceConvRef.current = setTimeout(() => {
+      debounceConvRef.current = null
+      void fetchConversations()
+    }, 320)
+  }, [fetchConversations])
+
+  useEffect(() => {
+    if (!isAuthenticated || !user?.id) return
+    return subscribe((raw) => {
+      if (typeof raw !== 'object' || raw === null) return
+      const typed = raw as {
+        type?: string
+        project_id?: string | null
+        peer_user_id?: string | null
+        message_ids?: string[]
+      }
+      const type = typed.type
+
+      if (type === 'error') {
+        const detail = (raw as { detail?: unknown }).detail
+        setSendError(typeof detail === 'string' ? detail : String(detail))
+        return
+      }
+
+      if (type === 'application_message') {
+        debouncedFetchConversations()
+        const conv = activeConvRef.current
+        const u = userRef.current
+        if (!conv || !u?.id) return
+        const msg = raw as ApplicationChatRow & { type?: string }
+        if (!appliesToThread(msg, conv.project_id, u.id, conv.peer_user_id)) return
+        setMessages((prev) => {
+          if (prev.some((m) => m.message_id === msg.message_id)) return prev
+          return [...prev, msg]
+        })
+        return
+      }
+
+      if (type === 'read_receipt') {
+        const conv = activeConvRef.current
+        if (!conv) return
+        if (trimId(typed.project_id) !== trimId(conv.project_id)) return
+        if (trimId(typed.peer_user_id) !== trimId(conv.peer_user_id)) return
+        const ids = new Set((typed.message_ids ?? []).map((id) => trimId(id)))
+        if (ids.size === 0) return
+        setMessages((prev) =>
+          prev.map((m) =>
+            ids.has(trimId(m.message_id)) ? { ...m, is_read: true } : m,
+          ),
+        )
+      }
+    })
+  }, [isAuthenticated, user?.id, subscribe, debouncedFetchConversations])
+
   // Listen for external "open to specific chat" requests (from project/manage pages)
   useEffect(() => {
     const handler = (e: Event) => {
@@ -153,13 +214,10 @@ export function MessagingHub() {
     return () => window.removeEventListener(OPEN_CHAT_EVENT, handler)
   }, [])
 
-  // ── WebSocket + history for active chat ────────────────────────────────────
+  // ── Load history for active chat (shared WebSocket stays open via ChatRealtimeProvider) ──
 
   useEffect(() => {
     if (!activeConv || !isAuthenticated || !user?.id) {
-      wsRef.current?.close()
-      wsRef.current = null
-      setWsReady(false)
       setHistoryLoaded(false)
       setMessages([])
       setLoadError(null)
@@ -175,11 +233,10 @@ export function MessagingHub() {
 
     let cancelled = false
 
-    const connect = async () => {
+    ;(async () => {
       setLoadError(null)
       setSendError(null)
       setHistoryLoaded(false)
-      setWsReady(false)
 
       try {
         const res = await fetch(
@@ -195,60 +252,29 @@ export function MessagingHub() {
         if (cancelled) return
         setMessages(Array.isArray(data) ? data : [])
         setHistoryLoaded(true)
+
+        const sock = getSocket()
+        if (sock?.readyState === WebSocket.OPEN) {
+          sock.send(
+            JSON.stringify({
+              type: 'mark_read',
+              project_id: activeConv.project_id,
+              peer_user_id: activeConv.peer_user_id,
+            }),
+          )
+        }
       } catch {
         if (!cancelled) {
           setLoadError('Failed to load messages.')
           setHistoryLoaded(true)
         }
-        return
       }
-
-      if (cancelled) return
-
-      const wsUrl = `${getWebSocketBaseUrl()}/ws/chat?token=${encodeURIComponent(token)}`
-      const ws = new WebSocket(wsUrl)
-      wsRef.current = ws
-
-      ws.onopen = () => { if (!cancelled) setWsReady(true) }
-
-      ws.onmessage = (ev) => {
-        try {
-          const raw = JSON.parse(ev.data as string) as unknown
-          if (
-            typeof raw === 'object' && raw !== null &&
-            (raw as { type?: string }).type === 'error'
-          ) {
-            const detail = (raw as { detail?: unknown }).detail
-            setSendError(typeof detail === 'string' ? detail : String(detail))
-            return
-          }
-          if (
-            typeof raw === 'object' && raw !== null &&
-            (raw as { type?: string }).type === 'application_message'
-          ) {
-            const msg = raw as ApplicationChatRow & { type?: string }
-            if (!user?.id || !activeConv) return
-            if (!appliesToThread(msg, activeConv.project_id, user.id, activeConv.peer_user_id)) return
-            setMessages((prev) => {
-              if (prev.some((m) => m.message_id === msg.message_id)) return prev
-              return [...prev, msg]
-            })
-          }
-        } catch { /* ignore malformed frames */ }
-      }
-
-      ws.onerror = () => { if (!cancelled) setSendError('Connection error.') }
-      ws.onclose = () => { if (!cancelled) setWsReady(false) }
-    }
-
-    void connect()
+    })()
 
     return () => {
       cancelled = true
-      wsRef.current?.close()
-      wsRef.current = null
     }
-  }, [activeConv, isAuthenticated, user?.id])
+  }, [activeConv, isAuthenticated, user?.id, getSocket])
 
   // ── Handlers ─────────────────────────────────────────────────────────────────
 
@@ -257,7 +283,7 @@ export function MessagingHub() {
     setSendError(null)
     const trimmed = draft.trim()
     if (!trimmed || !activeConv) return
-    const ws = wsRef.current
+    const ws = getSocket()
     if (!ws || ws.readyState !== WebSocket.OPEN) {
       setSendError('Not connected. Please wait or reopen the chat.')
       return
@@ -276,16 +302,12 @@ export function MessagingHub() {
   }
 
   const backToList = () => {
-    wsRef.current?.close()
-    wsRef.current = null
     setActiveConv(null)
     setView('list')
     void fetchConversations()
   }
 
   const closePanel = () => {
-    wsRef.current?.close()
-    wsRef.current = null
     setIsOpen(false)
     setView('list')
     setActiveConv(null)
@@ -297,7 +319,7 @@ export function MessagingHub() {
     <>
       {/* ── Floating action button ── */}
       <button
-        onClick={() => setIsOpen((o) => !o)}
+        onClick={() => (isOpen ? closePanel() : setIsOpen(true))}
         aria-label="Open messages"
         className="fixed bottom-6 right-6 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg ring-2 ring-primary/20 transition-transform hover:scale-105 active:scale-95 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-ring"
       >

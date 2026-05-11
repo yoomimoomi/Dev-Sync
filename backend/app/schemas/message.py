@@ -23,3 +23,7 @@ class ConversationRead(BaseModel):
     peer_name: str
     last_message: Optional[str] = None
     last_message_at: Optional[datetime] = None
+
+
+class MarkThreadReadResult(BaseModel):
+    updated_message_ids: list[str]

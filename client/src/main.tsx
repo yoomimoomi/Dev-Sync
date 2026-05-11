@@ -9,6 +9,7 @@ import '@fontsource/geist-mono/400.css'
 import '@fontsource/geist-mono/500.css'
 import './index.css'
 import { AuthProvider } from './lib/auth-context'
+import { ChatRealtimeProvider } from './lib/chat-realtime-context'
 import { SearchProvider } from './lib/search-context'
 import { ThemeProvider } from './lib/theme-context'
 import { MessagingHub } from './components/messaging-hub'
@@ -45,9 +46,11 @@ createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <ThemeProvider>
       <AuthProvider>
-        <SearchProvider>
-          <RouterProvider router={router} />
-        </SearchProvider>
+        <ChatRealtimeProvider>
+          <SearchProvider>
+            <RouterProvider router={router} />
+          </SearchProvider>
+        </ChatRealtimeProvider>
       </AuthProvider>
     </ThemeProvider>
   </StrictMode>,

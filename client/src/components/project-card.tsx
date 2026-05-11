@@ -18,6 +18,12 @@ export interface Project {
   technologies: string[]
   created_at: string
   applicant_user_names: Array<string | null>
+  /** Users with Accepted join applications (from API). */
+  accepted_team_members?: Array<{
+    user_id: string
+    name?: string | null
+    email?: string | null
+  }>
   comments: Array<{
     user_id: string
     project_id: string

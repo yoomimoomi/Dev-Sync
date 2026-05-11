@@ -84,6 +84,32 @@ def assert_application_chat_allowed(
         )
 
 
+def mark_thread_messages_read(
+    db: Session,
+    project_id: str,
+    reader_user_id: str,
+    peer_user_id: str,
+) -> list[str]:
+    """Mark inbound messages in this thread as read (receiver == reader, sender == peer). Returns message_ids updated."""
+    assert_application_chat_allowed(db, project_id, reader_user_id, peer_user_id)
+    uid = _norm_uid(reader_user_id)
+    peer = _norm_uid(peer_user_id)
+    pid = _norm_uid(project_id)
+    rows = (
+        db.query(Message)
+        .filter(func.trim(Message.project_id) == pid)
+        .filter(func.trim(Message.receiver_id) == uid)
+        .filter(func.trim(Message.sender_id) == peer)
+        .filter((Message.is_read.is_(False)) | (Message.is_read.is_(None)))
+        .all()
+    )
+    ids: list[str] = []
+    for m in rows:
+        m.is_read = True
+        ids.append((m.message_id or "").strip())
+    return ids
+
+
 def list_application_chat_messages(
     db: Session,
     project_id: str,
