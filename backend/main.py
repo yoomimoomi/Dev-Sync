@@ -27,7 +27,7 @@ from app.schemas.account import AccountCreate, AccountRead
 from app.schemas.application import ApplicationCreate, ApplicationRead, ProjectOwnerView
 from app.schemas.comment import CommentCreate, CommentRead
 from app.schemas.projects import ProjectCreate, ProjectRead
-from app.schemas.message import MessageRead
+from app.schemas.message import MessageRead, ConversationRead
 from app.models.message import Message
 from app.services.application_chat import (
     MAX_MESSAGE_CONTENT_LEN,
@@ -624,6 +624,60 @@ async def get_application_chat_messages(
         limit=limit,
     )
     return rows
+
+
+@app.get("/messages/conversations", response_model=list[ConversationRead])
+async def get_my_conversations(
+    current_user: Annotated[Account, Depends(get_current_user)],
+    db: Session = Depends(get_db),
+):
+    """Return all distinct conversation threads for the current user, newest first."""
+    uid = current_user.user_id.strip()
+
+    msgs = (
+        db.query(Message)
+        .filter(
+            (func.trim(Message.sender_id) == uid)
+            | (func.trim(Message.receiver_id) == uid)
+        )
+        .order_by(Message.created_at.desc())
+        .all()
+    )
+
+    # Deduplicate: keep only the most recent message per (project_id, peer_id) pair
+    seen: dict[tuple[str, str], Message] = {}
+    for msg in msgs:
+        s = (msg.sender_id or "").strip()
+        r = (msg.receiver_id or "").strip()
+        p = (msg.project_id or "").strip()
+        peer_id = r if s == uid else s
+        key = (p, peer_id)
+        if key not in seen:
+            seen[key] = msg
+
+    result: list[ConversationRead] = []
+    for (pid, peer_id), msg in seen.items():
+        peer = db.query(Account).filter(func.trim(Account.user_id) == peer_id).first()
+        project = (
+            db.query(Project)
+            .filter(func.trim(Project.project_id) == pid)
+            .filter(Project.is_deleted.is_(False))
+            .first()
+        )
+        if not peer or not project:
+            continue
+        result.append(
+            ConversationRead(
+                project_id=pid,
+                project_title=project.title,
+                peer_user_id=peer_id,
+                peer_name=peer.name,
+                last_message=msg.content,
+                last_message_at=msg.created_at,
+            )
+        )
+
+    return result
 
 
 # WebSocket protocol:

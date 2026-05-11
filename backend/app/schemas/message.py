@@ -14,3 +14,12 @@ class MessageRead(BaseModel):
     content: Optional[str] = None
     is_read: Optional[bool] = None
     created_at: Optional[datetime] = None
+
+
+class ConversationRead(BaseModel):
+    project_id: str
+    project_title: str
+    peer_user_id: str
+    peer_name: str
+    last_message: Optional[str] = None
+    last_message_at: Optional[datetime] = None
