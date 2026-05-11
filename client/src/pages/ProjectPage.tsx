@@ -7,9 +7,9 @@ import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { type Project } from '@/components/project-card'
 import { CommentSection } from '@/components/comment-section'
-import { ApplicationChatDialog } from '@/components/application-chat-dialog'
 import { JoinRequestDialog } from '@/components/join-request-dialog'
 import { Button } from '@/components/ui/button'
+import { openChatHub } from '@/lib/api-config'
 import type { Comment } from '@/lib/mock-data'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000'
@@ -181,22 +181,24 @@ export function ProjectPage() {
                       Request to Join
                     </Button>
                   </JoinRequestDialog>
-                  {ownerUserId ? (
-                    <ApplicationChatDialog
-                      projectId={project.project_id}
-                      peerUserId={ownerUserId}
-                      peerDisplayName={ownerName}
-                      title={`Message ${ownerName}`}
-                    >
-                      <Button type="button" variant="outline" className="w-full">
-                        Message owner
-                      </Button>
-                    </ApplicationChatDialog>
-                  ) : (
-                    <Button type="button" variant="outline" className="w-full" disabled>
-                      Message owner
-                    </Button>
-                  )}
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="w-full"
+                    disabled={!ownerUserId}
+                    onClick={() => {
+                      if (ownerUserId) {
+                        openChatHub({
+                          project_id: project.project_id,
+                          project_title: project.title,
+                          peer_user_id: ownerUserId,
+                          peer_name: ownerName,
+                        })
+                      }
+                    }}
+                  >
+                    Message owner
+                  </Button>
                 </div>
               </CardContent>
             </Card>

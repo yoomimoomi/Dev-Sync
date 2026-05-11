@@ -15,10 +15,10 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { ApplicationChatDialog } from '@/components/application-chat-dialog'
 import {
   API_BASE_URL,
   APPLICATION_SUBMITTED_EVENT,
+  openChatHub,
   TOKEN_STORAGE_KEY,
 } from '@/lib/api-config'
 
@@ -284,17 +284,22 @@ export function ManageProjectsPage() {
                       </div>
                     </div>
                     <div className="flex flex-wrap justify-end gap-2">
-                      <ApplicationChatDialog
-                        projectId={req.project_id}
-                        peerUserId={req.user_id}
-                        peerDisplayName={req.user_name}
-                        title={`Chat · ${req.project_title}`}
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        type="button"
+                        onClick={() =>
+                          openChatHub({
+                            project_id: req.project_id,
+                            project_title: req.project_title,
+                            peer_user_id: req.user_id,
+                            peer_name: req.user_name,
+                          })
+                        }
                       >
-                        <Button size="sm" variant="secondary" type="button">
-                          <MessageSquare className="mr-2 h-4 w-4" />
-                          Message
-                        </Button>
-                      </ApplicationChatDialog>
+                        <MessageSquare className="mr-2 h-4 w-4" />
+                        Message
+                      </Button>
                       <Button
                         size="sm"
                         disabled={requestActionKey !== null}

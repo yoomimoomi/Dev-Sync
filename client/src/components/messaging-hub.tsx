@@ -14,6 +14,8 @@ import { Textarea } from '@/components/ui/textarea'
 import {
   API_BASE_URL,
   getWebSocketBaseUrl,
+  OPEN_CHAT_EVENT,
+  type OpenChatPayload,
   readApiErrorMessage,
   TOKEN_STORAGE_KEY,
 } from '@/lib/api-config'
@@ -131,6 +133,25 @@ export function MessagingHub() {
       void fetchConversations()
     }
   }, [isOpen, view, isAuthenticated, fetchConversations])
+
+  // Listen for external "open to specific chat" requests (from project/manage pages)
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const payload = (e as CustomEvent<OpenChatPayload>).detail
+      setActiveConv({
+        project_id: payload.project_id,
+        project_title: payload.project_title,
+        peer_user_id: payload.peer_user_id,
+        peer_name: payload.peer_name,
+        last_message: null,
+        last_message_at: null,
+      })
+      setView('chat')
+      setIsOpen(true)
+    }
+    window.addEventListener(OPEN_CHAT_EVENT, handler)
+    return () => window.removeEventListener(OPEN_CHAT_EVENT, handler)
+  }, [])
 
   // ── WebSocket + history for active chat ────────────────────────────────────
 

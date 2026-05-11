@@ -13,6 +13,20 @@ export const TOKEN_STORAGE_KEY = 'devsync_access_token'
 /** Fired after a successful POST /application so dependent pages can refresh. */
 export const APPLICATION_SUBMITTED_EVENT = 'devsync-application-submitted'
 
+/** Fired to open the MessagingHub to a specific conversation. */
+export const OPEN_CHAT_EVENT = 'devsync-open-chat'
+
+export type OpenChatPayload = {
+  project_id: string
+  project_title: string
+  peer_user_id: string
+  peer_name: string
+}
+
+export function openChatHub(payload: OpenChatPayload): void {
+  window.dispatchEvent(new CustomEvent(OPEN_CHAT_EVENT, { detail: payload }))
+}
+
 export async function readApiErrorMessage(res: Response): Promise<string> {
   try {
     const body = (await res.json()) as unknown
