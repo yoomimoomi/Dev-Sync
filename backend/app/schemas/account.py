@@ -31,6 +31,7 @@ class AccountRead(BaseModel):
     name: str
     email: str
     grade: str | None
+    avatar_path: str | None = None
     roles: List[str] = []
     skills: List[str] = []
     technologies: List[str] = []
