@@ -33,6 +33,7 @@ class Account(Base):
     interests: Mapped[Optional[list[str]]] = mapped_column(ARRAY(Text()))
     github: Mapped[Optional[str]] = mapped_column(Text())
     linkedin: Mapped[Optional[str]] = mapped_column(Text())
+    avatar: Mapped[Optional[str]] = mapped_column(Text())
 
     projects: Mapped[list['Project']] = relationship('Project', back_populates='owner')
     # joined_teams: Mapped[list['Team']] = relationship(

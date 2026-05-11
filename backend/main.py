@@ -178,6 +178,8 @@ async def update_me(
         current_user.email = update.email
     if update.grade is not None:
         current_user.grade = update.grade
+    if update.avatar is not None:
+        current_user.avatar = update.avatar
     db.commit()
     db.refresh(current_user)
     return current_user
@@ -219,6 +221,7 @@ async def create_user(user_in: AccountCreate, db: Session = Depends(get_db)):
         roles=user_in.roles,
         technologies=user_in.technologies,
         skills=user_in.skills,
+        avatar=user_in.avatar,
         password_hash=hash_pwd(user_in.password),
     )
     db.add(new_user)
@@ -336,6 +339,7 @@ async def get_applications_to_my_projects(
         db.query(
             Application.user_id,
             Account.name.label("user_name"),
+            Account.avatar.label("user_avatar"),
             Application.project_id,
             Project.title.label("project_title"),
             Application.status,
@@ -353,6 +357,7 @@ async def get_applications_to_my_projects(
         {
             "user_id": r.user_id,
             "user_name": r.user_name,
+            "user_avatar": r.user_avatar,
             "project_id": r.project_id,
             "project_title": r.project_title,
             "status": r.status,

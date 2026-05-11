@@ -12,6 +12,7 @@ class AccountCreate(BaseModel):
     roles : List[str] = []
     skills : List[str] = []
     technologies : List[str] = []
+    avatar: Optional[str] = None
 
 
 
@@ -20,6 +21,7 @@ class AccountUpdate(BaseModel):
     name: Optional[str] = Field(None, max_length=50)
     email: Optional[EmailStr] = None
     grade: Optional[str] = Field(None, max_length=9)
+    avatar: Optional[str] = None
 
 
 class AccountRead(BaseModel):
@@ -32,6 +34,7 @@ class AccountRead(BaseModel):
     roles: List[str] = []
     skills: List[str] = []
     technologies: List[str] = []
+    avatar: str | None = None
 
     @field_validator("roles", "skills", "technologies", mode="before")
     @classmethod
