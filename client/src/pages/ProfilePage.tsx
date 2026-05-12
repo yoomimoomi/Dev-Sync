@@ -13,6 +13,7 @@ import {
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Textarea } from '@/components/ui/textarea'
 import {
   Select,
   SelectContent,
@@ -33,6 +34,7 @@ type Profile = {
   name: string
   email: string
   grade: string | null
+  bio: string | null
   roles: string[]
   skills: string[]
   technologies: string[]
@@ -76,6 +78,7 @@ export function ProfilePage() {
   const [lastName, setLastName] = useState('')
   const [email, setEmail] = useState('')
   const [grade, setGrade] = useState('')
+  const [bio, setBio] = useState('')
   const [picturePreview, setPicturePreview] = useState<string | null>(null)
   const [pictureFile, setPictureFile] = useState<File | null>(null)
   const [saving, setSaving] = useState(false)
@@ -125,6 +128,7 @@ export function ProfilePage() {
     setLastName(parts.slice(1).join(' '))
     setEmail(profile.email)
     setGrade(profile.grade ?? '')
+    setBio(profile.bio ?? '')
     setPicturePreview(avatarUrl)
     setPictureFile(null)
     setSaveError(null)
@@ -155,6 +159,7 @@ export function ProfilePage() {
       if (fullName !== profile.name) body.name = fullName
       if (email !== profile.email) body.email = email
       if ((grade || null) !== profile.grade) body.grade = grade || null
+      if ((bio.trim() || null) !== profile.bio) body.bio = bio.trim() || null
 
       if (Object.keys(body).length > 0) {
         const res = await fetch(`${API_BASE_URL}/user/me`, {
@@ -235,6 +240,9 @@ export function ProfilePage() {
                       {profile?.grade ? `Grade: ${profile.grade}` : 'Grade not set'}
                     </span>
                   </div>
+                  <p className="text-sm text-muted-foreground whitespace-pre-wrap">
+                    {profile?.bio || 'No bio yet'}
+                  </p>
                 </div>
               </CardContent>
             </Card>
@@ -393,6 +401,17 @@ export function ProfilePage() {
                   ))}
                 </SelectContent>
               </Select>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="bio">Bio</Label>
+              <Textarea
+                id="bio"
+                value={bio}
+                onChange={(e) => setBio(e.target.value)}
+                placeholder="Tell others about yourself..."
+                className="min-h-[96px]"
+              />
             </div>
 
             {saveError && (

@@ -9,6 +9,7 @@ class AccountCreate(BaseModel):
     email : EmailStr
     password: str = Field(..., min_length=8)
     grade: Optional[str] = Field(None, max_length=10)
+    bio: Optional[str] = None
     roles : List[str] = []
     skills : List[str] = []
     technologies : List[str] = []
@@ -20,6 +21,7 @@ class AccountUpdate(BaseModel):
     name: Optional[str] = Field(None, max_length=50)
     email: Optional[EmailStr] = None
     grade: Optional[str] = Field(None, max_length=9)
+    bio: Optional[str] = None
 
 
 class AccountRead(BaseModel):
@@ -29,6 +31,7 @@ class AccountRead(BaseModel):
     name: str
     email: str
     grade: str | None
+    bio: str | None = None
     avatar_path: str | None = None
     roles: List[str] = []
     skills: List[str] = []

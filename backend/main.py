@@ -181,8 +181,10 @@ async def update_me(
         if conflict:
             raise HTTPException(status_code=400, detail="Email already in use")
         current_user.email = update.email
-    if update.grade is not None:
+    if "grade" in update.model_fields_set:
         current_user.grade = update.grade
+    if "bio" in update.model_fields_set:
+        current_user.bio = update.bio
     db.commit()
     db.refresh(current_user)
     return current_user
