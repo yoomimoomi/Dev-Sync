@@ -20,11 +20,6 @@ export function getWebSocketBaseUrl(): string {
 
 export const TOKEN_STORAGE_KEY = 'devsync_access_token'
 
-export function avatarUrl(path?: string | null): string {
-  if (!path) return ''
-  return `${SUPABASE_URL}/storage/v1/object/public/${path}`
-}
-
 /** Fired after a successful POST /application so dependent pages can refresh. */
 export const APPLICATION_SUBMITTED_EVENT = 'devsync-application-submitted'
 
