@@ -19,11 +19,13 @@ import {
   API_BASE_URL,
   APPLICATION_SUBMITTED_EVENT,
   TOKEN_STORAGE_KEY,
+  avatarUrl,
 } from '@/lib/api-config'
 
 type JoinRequest = {
   user_id: string
   user_name: string
+  user_avatar: string | null
   project_id: string
   project_title: string
   status: string
@@ -170,7 +172,7 @@ export function ManageProjectsPage() {
                   <div className="flex items-start justify-between">
                     <div className="flex items-center gap-4">
                       <Avatar className="h-10 w-10">
-                        <AvatarImage src="" alt={project.owner.name} />
+                        <AvatarImage src={avatarUrl(project.owner.avatar_path)} alt={project.owner.name} />
                         <AvatarFallback className="bg-primary text-primary-foreground">
                           {project.owner.name.slice(0, 2).toUpperCase()}
                         </AvatarFallback>
@@ -271,6 +273,7 @@ export function ManageProjectsPage() {
                   >
                     <div className="flex items-center gap-3">
                       <Avatar>
+                        <AvatarImage src={avatarUrl(req.user_avatar)} alt={req.user_name} />
                         <AvatarFallback>{initials(req.user_name)}</AvatarFallback>
                       </Avatar>
                       <div>

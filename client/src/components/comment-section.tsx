@@ -2,11 +2,12 @@
 
 import { useEffect, useState } from "react"
 import { MessageCircle, Reply, Send } from "lucide-react"
-import { Avatar, AvatarFallback } from "@/components/ui/avatar"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Textarea } from "@/components/ui/textarea"
 import { useAuth } from "@/lib/auth-context"
+import { avatarUrl } from "@/lib/api-config"
 import type { Comment } from "@/lib/mock-data"
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000"
@@ -19,6 +20,7 @@ type ApiComment = {
   created_at: string | null
   user: {
     name: string
+    avatar_path?: string | null
   } | null
 }
 
@@ -51,6 +53,7 @@ function CommentItem({
     <div className="space-y-3">
       <div className="flex gap-3">
         <Avatar className="h-8 w-8 shrink-0">
+          <AvatarImage src={avatarUrl(comment.author.avatar_path)} alt={comment.author.name} />
           <AvatarFallback className="bg-secondary text-secondary-foreground text-xs">
             {comment.author.name.slice(0, 2).toUpperCase()}
           </AvatarFallback>
@@ -99,6 +102,7 @@ function CommentItem({
           {comment.replies.map((reply) => (
             <div key={reply.id} className="flex gap-3">
               <Avatar className="h-6 w-6 shrink-0">
+                <AvatarImage src={avatarUrl(reply.author.avatar_path)} alt={reply.author.name} />
                 <AvatarFallback className="bg-secondary text-secondary-foreground text-xs">
                   {reply.author.name.slice(0, 2).toUpperCase()}
                 </AvatarFallback>
@@ -163,7 +167,7 @@ export function CommentSection({ projectId, initialComments }: CommentSectionPro
       const comment: Comment = {
         id: `${savedComment.user_id}-${savedComment.project_id}`,
         projectId: savedComment.project_id,
-        author: { name: savedComment.user?.name ?? user.name },
+        author: { name: savedComment.user?.name ?? user.name, avatar_path: savedComment.user?.avatar_path ?? user.avatar_path },
         content: savedComment.content ?? "",
         createdAt: savedComment.created_at ?? "Just now",
       }
@@ -184,7 +188,7 @@ export function CommentSection({ projectId, initialComments }: CommentSectionPro
         const newReply: Comment = {
           id: `reply-${Date.now()}`,
           projectId,
-          author: { name: user.name },
+          author: { name: user.name, avatar_path: user.avatar_path },
           content,
           createdAt: "Just now",
         }
@@ -209,6 +213,7 @@ export function CommentSection({ projectId, initialComments }: CommentSectionPro
         {isAuthenticated ? (
           <div className="flex gap-3">
             <Avatar className="h-8 w-8 shrink-0">
+              <AvatarImage src={avatarUrl(user?.avatar_path)} alt={user?.name ?? "Current user"} />
               <AvatarFallback className="bg-primary text-primary-foreground text-xs">
                 {user?.name.slice(0, 2).toUpperCase()}
               </AvatarFallback>
