@@ -12,7 +12,7 @@ export interface Comment {
 
 export interface Notification {
   id: string
-  type: 'join_request' | 'accepted' | 'message' | 'update'
+  type: 'join_request' | 'accepted' | 'declined' | 'message' | 'comment' | 'update'
   title: string
   description: string
   time: string

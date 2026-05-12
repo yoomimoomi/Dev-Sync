@@ -2,7 +2,7 @@
 
 from datetime import datetime, timezone
 from random import randrange
-from typing import Optional
+from typing import Literal, Optional
 
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -122,6 +122,82 @@ def create_join_request_notification(
         user_id=oid,
         project_id=pid,
         notification_type="join_request",
+        created_at=now,
+        title=title,
+        content=body or None,
+        read=False,
+    )
+    db.add(row)
+    return row
+
+
+def create_project_comment_notification(
+    db: Session,
+    *,
+    owner_id: str,
+    project_id: str,
+    project_title: str,
+    commenter_display_name: str,
+    comment_preview: str,
+) -> Optional[Notification]:
+    """Notify project owner when someone posts a comment. Caller commits."""
+    oid = (owner_id or "").strip()
+    pid = (project_id or "").strip()
+    if not oid or not pid:
+        return None
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    pt = (project_title or "").strip() or "your project"
+    title = f"New comment: {pt}"[:50]
+    preview = (comment_preview or "").strip()
+    if len(preview) > 500:
+        preview = preview[:497] + "..."
+    who = (commenter_display_name or "").strip() or "Someone"
+    body = f"{who} commented: {preview}".strip()[:2000]
+    row = Notification(
+        notification_id=generate_notification_id(db),
+        user_id=oid,
+        project_id=pid,
+        notification_type="comment",
+        created_at=now,
+        title=title,
+        content=body or None,
+        read=False,
+    )
+    db.add(row)
+    return row
+
+
+def create_application_decision_notification(
+    db: Session,
+    *,
+    applicant_id: str,
+    project_id: str,
+    project_title: str,
+    decision: Literal["accepted", "declined"],
+    owner_display_name: str,
+) -> Optional[Notification]:
+    """Notify applicant when the owner accepts or declines their application. Caller commits."""
+    aid = (applicant_id or "").strip()
+    pid = (project_id or "").strip()
+    if not aid or not pid:
+        return None
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    pt = (project_title or "").strip() or "the project"
+    owner = (owner_display_name or "").strip() or "The project owner"
+    if decision == "accepted":
+        title = "You were accepted"
+        ntype = "app_accept"
+        verb = "accepted"
+    else:
+        title = "Application declined"
+        ntype = "app_decline"
+        verb = "declined"
+    body = f'{owner} {verb} your application to "{pt}".'.strip()[:2000]
+    row = Notification(
+        notification_id=generate_notification_id(db),
+        user_id=aid,
+        project_id=pid,
+        notification_type=ntype,
         created_at=now,
         title=title,
         content=body or None,

@@ -41,8 +41,10 @@ from app.services.application_chat import (
     mark_thread_messages_read,
 )
 from app.services.notifications import (
+    create_application_decision_notification,
     create_chat_message_notification,
     create_join_request_notification,
+    create_project_comment_notification,
     list_notifications_for_user,
     mark_notifications_read,
     sender_display_name,
@@ -540,6 +542,33 @@ async def accept_application(
     application.status = "Accepted"
     db.commit()
     db.refresh(application)
+
+    applicant_ws = (application.user_id or "").strip()
+    project_fk = (project.project_id or "").strip()
+    try:
+        decn = create_application_decision_notification(
+            db,
+            applicant_id=application.user_id,
+            project_id=project_fk,
+            project_title=project.title or "",
+            decision="accepted",
+            owner_display_name=(current_user.name or "").strip()
+            or current_user.user_id.strip(),
+        )
+        if decn is not None:
+            db.commit()
+            db.refresh(decn)
+            await chat_manager.send_personal_message(
+                _notification_ws_payload(decn), applicant_ws
+            )
+    except Exception:
+        logger.exception(
+            "Accept notification failed project=%s applicant=%s",
+            project_fk,
+            applicant_ws,
+        )
+        db.rollback()
+
     return application
 
 
@@ -575,6 +604,33 @@ async def decline_application(
     application.status = "Declined"
     db.commit()
     db.refresh(application)
+
+    applicant_ws = (application.user_id or "").strip()
+    project_fk = (project.project_id or "").strip()
+    try:
+        decn = create_application_decision_notification(
+            db,
+            applicant_id=application.user_id,
+            project_id=project_fk,
+            project_title=project.title or "",
+            decision="declined",
+            owner_display_name=(current_user.name or "").strip()
+            or current_user.user_id.strip(),
+        )
+        if decn is not None:
+            db.commit()
+            db.refresh(decn)
+            await chat_manager.send_personal_message(
+                _notification_ws_payload(decn), applicant_ws
+            )
+    except Exception:
+        logger.exception(
+            "Decline notification failed project=%s applicant=%s",
+            project_fk,
+            applicant_ws,
+        )
+        db.rollback()
+
     return application
 
 
@@ -670,19 +726,9 @@ async def create_application(
         else:
             db.commit()
             db.refresh(jn)
-            ca = jn.created_at
-            created_str_j = to_iso_utc_z(ca) or ""
-            nid = (jn.notification_id or "").strip()
-            notif_app = {
-                "type": "notification",
-                "id": nid,
-                "project_id": (jn.project_id or "").strip(),
-                "title": jn.title,
-                "content": jn.content,
-                "read": bool(jn.read),
-                "created_at": created_str_j,
-            }
-            await chat_manager.send_personal_message(notif_app, owner_ws_id)
+            await chat_manager.send_personal_message(
+                _notification_ws_payload(jn), owner_ws_id
+            )
     except Exception:
         logger.exception("Join request notification failed for project=%s owner=%s", project_fk_id, owner_ws_id)
         db.rollback()
@@ -727,7 +773,8 @@ async def create_comment(
     db.add(new_comment)
     db.commit()
     db.refresh(new_comment)
-    return (
+
+    result = (
         db.query(Comment)
         .filter(
             Comment.user_id == new_comment.user_id,
@@ -736,6 +783,36 @@ async def create_comment(
         .options(selectinload(Comment.user))
         .first()
     )
+
+    owner_trim = (project.user_id or "").strip()
+    commenter_trim = (current_user.user_id or "").strip()
+    if owner_trim and owner_trim != commenter_trim:
+        project_fk = (project.project_id or "").strip()
+        try:
+            cn = create_project_comment_notification(
+                db,
+                owner_id=project.user_id,
+                project_id=project_fk,
+                project_title=project.title or "",
+                commenter_display_name=(current_user.name or "").strip()
+                or commenter_trim,
+                comment_preview=new_comment.content or "",
+            )
+            if cn is not None:
+                db.commit()
+                db.refresh(cn)
+                await chat_manager.send_personal_message(
+                    _notification_ws_payload(cn), owner_trim
+                )
+        except Exception:
+            logger.exception(
+                "Comment notification failed project=%s owner=%s",
+                project_fk,
+                owner_trim,
+            )
+            db.rollback()
+
+    return result
 
 
 def _http_exception_detail(exc: HTTPException) -> str:
@@ -856,6 +933,18 @@ def _notification_to_read(n: Notification) -> NotificationRead:
         read=bool(n.read),
         created_at=ca,
     )
+
+
+def _notification_ws_payload(n: Notification) -> dict:
+    return {
+        "type": "notification",
+        "id": (n.notification_id or "").strip(),
+        "project_id": (n.project_id or "").strip(),
+        "title": n.title,
+        "content": n.content,
+        "read": bool(n.read),
+        "created_at": to_iso_utc_z(n.created_at) or "",
+    }
 
 
 @app.get("/notifications", response_model=list[NotificationRead])
@@ -1071,19 +1160,9 @@ async def websocket_chat(websocket: WebSocket, token: str, db: Session = Depends
                 if n is not None:
                     db.commit()
                     db.refresh(n)
-                    ca = n.created_at
-                    created_str_n = to_iso_utc_z(ca) or ""
-                    nid = (n.notification_id or "").strip()
-                    notif_out = {
-                        "type": "notification",
-                        "id": nid,
-                        "project_id": (n.project_id or "").strip(),
-                        "title": n.title,
-                        "content": n.content,
-                        "read": bool(n.read),
-                        "created_at": created_str_n,
-                    }
-                    await chat_manager.send_personal_message(notif_out, receiver_id)
+                    await chat_manager.send_personal_message(
+                        _notification_ws_payload(n), receiver_id
+                    )
             except Exception:
                 db.rollback()
 

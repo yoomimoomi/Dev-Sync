@@ -1,6 +1,13 @@
 import { useCallback, useEffect, useState } from "react"
 import { Link } from "react-router-dom"
-import { Bell, UserPlus, CheckCircle, MessageSquare, RefreshCw } from "lucide-react"
+import {
+  Bell,
+  UserPlus,
+  CheckCircle,
+  MessageSquare,
+  RefreshCw,
+  XCircle,
+} from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import type { Notification } from "@/lib/mock-data"
@@ -23,6 +30,8 @@ function inferNotificationType(title: string): Notification["type"] {
   const t = title.toLowerCase()
   if (t.includes("join request") || t.includes("applied")) return "join_request"
   if (t.includes("message from") || t.startsWith("message")) return "message"
+  if (t.includes("new comment") || t.startsWith("comment:")) return "comment"
+  if (t.includes("declined")) return "declined"
   if (t.includes("accepted")) return "accepted"
   return "update"
 }
@@ -51,8 +60,12 @@ function NotificationIcon({ type }: { type: Notification["type"] }) {
       return <UserPlus className="h-4 w-4 text-primary" />
     case "accepted":
       return <CheckCircle className="h-4 w-4 text-green-500" />
+    case "declined":
+      return <XCircle className="h-4 w-4 text-destructive" />
     case "message":
       return <MessageSquare className="h-4 w-4 text-blue-500" />
+    case "comment":
+      return <MessageSquare className="h-4 w-4 text-violet-500" />
     case "update":
       return <RefreshCw className="h-4 w-4 text-orange-500" />
     default:
