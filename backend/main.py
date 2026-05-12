@@ -288,7 +288,6 @@ async def get_public_profile(user_id: str, db: Session = Depends(get_db)):
             selectinload(Project.comments).selectinload(Comment.user),
         )
         .order_by(Project.created_at.desc())
-        .distinct(Project.project_id)
         .all()
     )
 
