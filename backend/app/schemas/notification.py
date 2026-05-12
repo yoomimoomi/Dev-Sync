@@ -1,7 +1,9 @@
 from datetime import datetime
 from typing import Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_serializer
+
+from app.datetime_wire import to_iso_utc_z
 
 
 class NotificationRead(BaseModel):
@@ -13,6 +15,10 @@ class NotificationRead(BaseModel):
     content: Optional[str] = None
     read: bool = False
     created_at: Optional[datetime] = None
+
+    @field_serializer("created_at")
+    def _ser_created_at(self, v: datetime | None) -> str | None:
+        return to_iso_utc_z(v)
 
 
 class NotificationsMarkReadBody(BaseModel):

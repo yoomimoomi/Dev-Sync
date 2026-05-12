@@ -1,5 +1,7 @@
 /** Shared helpers for applicant ↔ peer DM threads (WebSocket + list UI). */
 
+import { parseChatTimestamp } from "@/lib/datetime-display"
+
 export function trimChatId(v: string | null | undefined): string {
   return (v ?? "").trim()
 }
@@ -70,8 +72,8 @@ export function patchConversationsFromMessage(
   if (!found) return { next: prev, found: false }
 
   const sorted = [...next].sort((a, b) => {
-    const ta = new Date(a.last_message_at ?? 0).getTime()
-    const tb = new Date(b.last_message_at ?? 0).getTime()
+    const ta = parseChatTimestamp(a.last_message_at)?.getTime() ?? 0
+    const tb = parseChatTimestamp(b.last_message_at)?.getTime() ?? 0
     return tb - ta
   })
   return { next: sorted, found: true }

@@ -10,8 +10,9 @@ import {
   useState,
   type ReactNode,
 } from "react"
-import { getWebSocketBaseUrl, TOKEN_STORAGE_KEY } from "@/lib/api-config"
+import { getWebSocketBaseUrl, isSupabaseRealtimeConfigured, TOKEN_STORAGE_KEY } from "@/lib/api-config"
 import { useAuth } from "@/lib/auth-context"
+import { getSupabaseRealtimeClient, mapMessageInsertToApplicationMessage } from "@/lib/supabase-realtime"
 
 type WsListener = (payload: unknown) => void
 
@@ -55,35 +56,92 @@ export function ChatRealtimeProvider({ children }: { children: ReactNode }) {
       return
     }
 
-    const url = `${getWebSocketBaseUrl()}/ws/chat?token=${encodeURIComponent(token)}`
-    const ws = new WebSocket(url)
-    wsRef.current = ws
+    const baseUrl = `${getWebSocketBaseUrl()}/ws/chat?token=${encodeURIComponent(token)}`
+    let cancelled = false
+    let retryTimer: ReturnType<typeof setTimeout> | null = null
+    let attempt = 0
 
-    ws.onopen = () => setReady(true)
-    ws.onclose = () => {
-      setReady(false)
-      if (wsRef.current === ws) wsRef.current = null
-    }
-    ws.onerror = () => setReady(false)
-    ws.onmessage = (ev) => {
-      try {
-        const payload = JSON.parse(ev.data as string) as unknown
-        listenersRef.current.forEach((fn) => {
-          try {
-            fn(payload)
-          } catch {
-            /* listener fault isolation */
-          }
-        })
-      } catch {
-        /* ignore malformed */
+    const wireSocket = (ws: WebSocket) => {
+      ws.onmessage = (ev) => {
+        try {
+          const payload = JSON.parse(ev.data as string) as unknown
+          listenersRef.current.forEach((fn) => {
+            try {
+              fn(payload)
+            } catch {
+              /* listener fault isolation */
+            }
+          })
+        } catch {
+          /* ignore malformed */
+        }
       }
     }
 
+    const connect = () => {
+      if (cancelled) return
+      const ws = new WebSocket(baseUrl)
+      wsRef.current = ws
+      wireSocket(ws)
+
+      ws.onopen = () => {
+        attempt = 0
+        setReady(true)
+      }
+      ws.onerror = () => setReady(false)
+      ws.onclose = () => {
+        setReady(false)
+        if (wsRef.current === ws) wsRef.current = null
+        if (cancelled) return
+        const delayMs = Math.min(8000, Math.round(350 * 1.55 ** Math.min(attempt, 8)))
+        attempt += 1
+        retryTimer = setTimeout(connect, delayMs)
+      }
+    }
+
+    connect()
+
     return () => {
-      ws.close()
-      if (wsRef.current === ws) wsRef.current = null
+      cancelled = true
+      if (retryTimer != null) clearTimeout(retryTimer)
+      const w = wsRef.current
+      if (w) {
+        w.onclose = null
+        w.close()
+      }
+      wsRef.current = null
       setReady(false)
+    }
+  }, [isAuthenticated, user?.id])
+
+  // Supabase Realtime: INSERT on `messages` (same payload shape as WebSocket echo; UI dedupes by message_id).
+  useEffect(() => {
+    if (!isSupabaseRealtimeConfigured() || !isAuthenticated || !user?.id) return
+    const supabase = getSupabaseRealtimeClient()
+    if (!supabase) return
+
+    const channel = supabase
+      .channel(`devsync-messages:${user.id}`)
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "messages" },
+        (payload) => {
+          const row = payload.new
+          if (!row || typeof row !== "object") return
+          const msg = mapMessageInsertToApplicationMessage(row as Record<string, unknown>)
+          listenersRef.current.forEach((fn) => {
+            try {
+              fn(msg)
+            } catch {
+              /* listener fault isolation */
+            }
+          })
+        },
+      )
+      .subscribe()
+
+    return () => {
+      void supabase.removeChannel(channel)
     }
   }, [isAuthenticated, user?.id])
 

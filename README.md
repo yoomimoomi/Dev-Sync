@@ -22,4 +22,4 @@ npm install
 npm run dev
 ```
 
-Use `client/.env` with `VITE_API_BASE_URL` matching your API URL (default `http://localhost:8000`).
+Use `client/.env` with `VITE_API_BASE_URL` matching your API URL (default `http://localhost:8000`). For Supabase Realtime on `messages`, set `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, and in the backend `SUPABASE_JWT_SECRET` (see [backend/README.md](backend/README.md)).

@@ -21,6 +21,13 @@ import {
 import { useChatRealtime } from '@/lib/chat-realtime-context'
 import { useAuth } from '@/lib/auth-context'
 import type { ApplicationChatRow } from '@/components/application-chat-dialog'
+import {
+  appliesToThread,
+  newOptimisticMessageId,
+  patchConversationsFromMessage,
+  trimChatId,
+} from '@/lib/chat-thread-utils'
+import { formatSmartDayTime } from '@/lib/datetime-display'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -43,36 +50,6 @@ function initials(name: string): string {
     .join('')
     .slice(0, 2)
     .toUpperCase()
-}
-
-function trimId(v: string | null | undefined): string {
-  return (v ?? '').trim()
-}
-
-function appliesToThread(
-  msg: ApplicationChatRow,
-  projectId: string,
-  selfId: string,
-  peerId: string,
-): boolean {
-  if (trimId(msg.project_id) !== trimId(projectId)) return false
-  const self = trimId(selfId)
-  const peer = trimId(peerId)
-  const s = trimId(msg.sender_id)
-  const r = trimId(msg.receiver_id)
-  return (s === self && r === peer) || (s === peer && r === self)
-}
-
-function formatTime(iso: string | null | undefined): string {
-  if (!iso) return ''
-  const d = new Date(iso)
-  const now = new Date()
-  const diffMs = now.getTime() - d.getTime()
-  const diffDays = Math.floor(diffMs / 86_400_000)
-  if (diffDays === 0) return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-  if (diffDays === 1) return 'Yesterday'
-  if (diffDays < 7) return d.toLocaleDateString([], { weekday: 'short' })
-  return d.toLocaleDateString([], { month: 'short', day: 'numeric' })
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -100,10 +77,10 @@ export function MessagingHub() {
   const bottomRef = useRef<HTMLDivElement | null>(null)
   const activeConvRef = useRef<ConversationRow | null>(null)
   const userRef = useRef(user)
-  const debounceConvRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const pendingLocalIdsRef = useRef<Set<string>>(new Set())
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+    bottomRef.current?.scrollIntoView({ block: 'end', behavior: 'auto' })
   }, [messages])
 
   // ── Fetch conversation list ──────────────────────────────────────────────────
@@ -139,14 +116,6 @@ export function MessagingHub() {
   activeConvRef.current = activeConv
   userRef.current = user
 
-  const debouncedFetchConversations = useCallback(() => {
-    if (debounceConvRef.current) clearTimeout(debounceConvRef.current)
-    debounceConvRef.current = setTimeout(() => {
-      debounceConvRef.current = null
-      void fetchConversations()
-    }, 320)
-  }, [fetchConversations])
-
   useEffect(() => {
     if (!isAuthenticated || !user?.id) return
     return subscribe((raw) => {
@@ -160,21 +129,47 @@ export function MessagingHub() {
       const type = typed.type
 
       if (type === 'error') {
+        pendingLocalIdsRef.current.clear()
+        setMessages((prev) => prev.filter((m) => !String(m.message_id).startsWith('local-')))
         const detail = (raw as { detail?: unknown }).detail
         setSendError(typeof detail === 'string' ? detail : String(detail))
         return
       }
 
       if (type === 'application_message') {
-        debouncedFetchConversations()
-        const conv = activeConvRef.current
-        const u = userRef.current
-        if (!conv || !u?.id) return
         const msg = raw as ApplicationChatRow & { type?: string }
+        const u = userRef.current
+        if (u?.id) {
+          setConversations((prev) => {
+            const { next, found } = patchConversationsFromMessage(prev, msg, u.id)
+            if (!found) {
+              queueMicrotask(() => void fetchConversations())
+            }
+            return found ? next : prev
+          })
+        }
+        const conv = activeConvRef.current
+        if (!conv || !u?.id) return
         if (!appliesToThread(msg, conv.project_id, u.id, conv.peer_user_id)) return
         setMessages((prev) => {
           if (prev.some((m) => m.message_id === msg.message_id)) return prev
-          return [...prev, msg]
+          const self = trimChatId(u.id)
+          const fromSelf = trimChatId(msg.sender_id) === self
+          let base = prev
+          if (fromSelf) {
+            const optimisticIdx = prev.findIndex(
+              (m) =>
+                String(m.message_id).startsWith('local-') &&
+                trimChatId(m.sender_id) === self &&
+                m.content === msg.content,
+            )
+            if (optimisticIdx >= 0) {
+              const oid = prev[optimisticIdx]!.message_id
+              pendingLocalIdsRef.current.delete(oid)
+              base = prev.filter((_, i) => i !== optimisticIdx)
+            }
+          }
+          return [...base, msg]
         })
         return
       }
@@ -182,18 +177,18 @@ export function MessagingHub() {
       if (type === 'read_receipt') {
         const conv = activeConvRef.current
         if (!conv) return
-        if (trimId(typed.project_id) !== trimId(conv.project_id)) return
-        if (trimId(typed.peer_user_id) !== trimId(conv.peer_user_id)) return
-        const ids = new Set((typed.message_ids ?? []).map((id) => trimId(id)))
+        if (trimChatId(typed.project_id) !== trimChatId(conv.project_id)) return
+        if (trimChatId(typed.peer_user_id) !== trimChatId(conv.peer_user_id)) return
+        const ids = new Set((typed.message_ids ?? []).map((id) => trimChatId(id)))
         if (ids.size === 0) return
         setMessages((prev) =>
           prev.map((m) =>
-            ids.has(trimId(m.message_id)) ? { ...m, is_read: true } : m,
+            ids.has(trimChatId(m.message_id)) ? { ...m, is_read: true } : m,
           ),
         )
       }
     })
-  }, [isAuthenticated, user?.id, subscribe, debouncedFetchConversations])
+  }, [isAuthenticated, user?.id, subscribe, fetchConversations])
 
   // Listen for external "open to specific chat" requests (from project/manage pages)
   useEffect(() => {
@@ -282,12 +277,27 @@ export function MessagingHub() {
     e.preventDefault()
     setSendError(null)
     const trimmed = draft.trim()
-    if (!trimmed || !activeConv) return
+    if (!trimmed || !activeConv || !user?.id) return
     const ws = getSocket()
     if (!ws || ws.readyState !== WebSocket.OPEN) {
       setSendError('Not connected. Please wait or reopen the chat.')
       return
     }
+    const tid = newOptimisticMessageId()
+    pendingLocalIdsRef.current.add(tid)
+    const now = new Date().toISOString()
+    setMessages((prev) => [
+      ...prev,
+      {
+        message_id: tid,
+        project_id: activeConv.project_id,
+        sender_id: user.id,
+        receiver_id: activeConv.peer_user_id,
+        content: trimmed,
+        created_at: now,
+        is_read: false,
+      },
+    ])
     ws.send(JSON.stringify({
       project_id: activeConv.project_id,
       receiver_id: activeConv.peer_user_id,
@@ -342,7 +352,7 @@ export function MessagingHub() {
                 </div>
               </div>
 
-              <div className="flex-1 overflow-y-auto">
+              <div className="min-h-0 flex-1 overflow-y-auto">
                 {convLoading && (
                   <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
                     Loading…
@@ -385,7 +395,7 @@ export function MessagingHub() {
                       <div className="flex items-baseline justify-between gap-2">
                         <span className="truncate text-sm font-semibold">{conv.peer_name}</span>
                         <span className="shrink-0 text-[11px] text-muted-foreground">
-                          {formatTime(conv.last_message_at)}
+                          {formatSmartDayTime(conv.last_message_at)}
                         </span>
                       </div>
                       <p className="truncate text-xs text-muted-foreground">{conv.project_title}</p>
@@ -403,7 +413,7 @@ export function MessagingHub() {
 
           {/* ════ CHAT THREAD ════ */}
           {view === 'chat' && activeConv && (
-            <>
+            <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
               {/* Header */}
               <div className="flex items-center gap-2 border-b px-3 py-2.5 shrink-0">
                 <button
@@ -429,8 +439,8 @@ export function MessagingHub() {
                 </p>
               )}
 
-              {/* Messages */}
-              <ScrollArea className="flex-1 px-3 py-2">
+              {/* Messages — min-h-0 so flex-1 can shrink and scroll; otherwise the composer is clipped */}
+              <ScrollArea className="min-h-0 flex-1 px-3 py-2">
                 <div className="flex flex-col gap-2">
                   {!historyLoaded && !loadError && (
                     <p className="py-6 text-center text-xs text-muted-foreground">Loading…</p>
@@ -439,7 +449,7 @@ export function MessagingHub() {
                     <p className="py-6 text-center text-xs text-muted-foreground">No messages yet. Say hello!</p>
                   )}
                   {messages.map((m) => {
-                    const mine = trimId(m.sender_id) === trimId(user?.id)
+                    const mine = trimChatId(m.sender_id) === trimChatId(user?.id)
                     return (
                       <div
                         key={m.message_id}
@@ -452,7 +462,7 @@ export function MessagingHub() {
                         <p className="whitespace-pre-wrap break-words">{m.content ?? ''}</p>
                         {m.created_at && (
                           <p className={`mt-0.5 text-[10px] opacity-60 ${mine ? 'text-right' : ''}`}>
-                            {formatTime(m.created_at)}
+                            {formatSmartDayTime(m.created_at)}
                           </p>
                         )}
                       </div>
@@ -462,45 +472,43 @@ export function MessagingHub() {
                 </div>
               </ScrollArea>
 
-              {/* Input */}
-              {!loadError && (
-                <form
-                  onSubmit={handleSend}
-                  className="shrink-0 border-t px-3 py-2"
-                >
-                  {sendError && (
-                    <p className="mb-1 text-[11px] text-destructive">{sendError}</p>
-                  )}
-                  <div className="flex items-end gap-2">
-                    <Textarea
-                      placeholder={wsReady ? 'Message…' : 'Connecting…'}
-                      className="min-h-[38px] max-h-[96px] flex-1 resize-none py-2 text-sm"
-                      rows={1}
-                      value={draft}
-                      disabled={!wsReady}
-                      onChange={(e) => setDraft(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' && !e.shiftKey) {
-                          e.preventDefault()
-                          handleSend(e as unknown as FormEvent)
-                        }
-                      }}
-                    />
-                    <Button
-                      type="submit"
-                      size="icon"
-                      className="h-9 w-9 shrink-0"
-                      disabled={!wsReady || !draft.trim()}
-                    >
-                      <Send className="h-4 w-4" />
-                    </Button>
-                  </div>
-                  <p className="mt-1 text-[10px] text-muted-foreground">
-                    {wsReady ? 'Connected · Enter to send' : 'Connecting…'}
-                  </p>
-                </form>
-              )}
-            </>
+              {/* Input — keep visible even if history GET failed (Realtime may still deliver). */}
+              <form
+                onSubmit={handleSend}
+                className="shrink-0 border-t px-3 py-2"
+              >
+                {sendError && (
+                  <p className="mb-1 text-[11px] text-destructive">{sendError}</p>
+                )}
+                <div className="flex items-end gap-2">
+                  <Textarea
+                    placeholder={wsReady ? 'Message…' : 'Connecting…'}
+                    className="min-h-[38px] max-h-[96px] flex-1 resize-none py-2 text-sm"
+                    rows={1}
+                    value={draft}
+                    disabled={!wsReady}
+                    onChange={(e) => setDraft(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault()
+                        handleSend(e as unknown as FormEvent)
+                      }
+                    }}
+                  />
+                  <Button
+                    type="submit"
+                    size="icon"
+                    className="h-9 w-9 shrink-0"
+                    disabled={!wsReady || !draft.trim()}
+                  >
+                    <Send className="h-4 w-4" />
+                  </Button>
+                </div>
+                <p className="mt-1 text-[10px] text-muted-foreground">
+                  {wsReady ? 'Connected · Enter to send' : 'Connecting…'}
+                </p>
+              </form>
+            </div>
           )}
         </div>
       )}

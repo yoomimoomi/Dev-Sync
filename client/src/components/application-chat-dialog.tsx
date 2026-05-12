@@ -26,6 +26,12 @@ import {
 } from '@/lib/api-config'
 import { useChatRealtime } from '@/lib/chat-realtime-context'
 import { useAuth } from '@/lib/auth-context'
+import {
+  appliesToThread,
+  newOptimisticMessageId,
+  trimChatId,
+} from '@/lib/chat-thread-utils'
+import { formatSmartDayTime } from '@/lib/datetime-display'
 
 export type ApplicationChatRow = {
   message_id: string
@@ -43,24 +49,6 @@ interface ApplicationChatDialogProps {
   peerDisplayName: string
   title?: string
   children: ReactNode
-}
-
-function trimId(v: string | null | undefined): string {
-  return (v ?? '').trim()
-}
-
-function appliesToThread(
-  msg: ApplicationChatRow,
-  projectId: string,
-  selfId: string,
-  peerId: string,
-): boolean {
-  if (trimId(msg.project_id) !== trimId(projectId)) return false
-  const self = trimId(selfId)
-  const peer = trimId(peerId)
-  const s = trimId(msg.sender_id)
-  const r = trimId(msg.receiver_id)
-  return (s === self && r === peer) || (s === peer && r === self)
 }
 
 export function ApplicationChatDialog({
@@ -85,9 +73,10 @@ export function ApplicationChatDialog({
   peerUserIdRef.current = peerUserId
   const userRef = useRef(user)
   userRef.current = user
+  const pendingLocalIdsRef = useRef<Set<string>>(new Set())
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+    bottomRef.current?.scrollIntoView({ block: 'end', behavior: 'auto' })
   }, [messages])
 
   useEffect(() => {
@@ -156,6 +145,8 @@ export function ApplicationChatDialog({
       if (typeof raw !== 'object' || raw === null) return
       const type = (raw as { type?: string }).type
       if (type === 'error') {
+        pendingLocalIdsRef.current.clear()
+        setMessages((prev) => prev.filter((m) => !String(m.message_id).startsWith('local-')))
         const detail = (raw as { detail?: unknown }).detail
         setSendError(typeof detail === 'string' ? detail : String(detail))
         return
@@ -169,7 +160,23 @@ export function ApplicationChatDialog({
         if (!appliesToThread(msg, pid, u.id, peer)) return
         setMessages((prev) => {
           if (prev.some((m) => m.message_id === msg.message_id)) return prev
-          return [...prev, msg]
+          const self = trimChatId(u.id)
+          const fromSelf = trimChatId(msg.sender_id) === self
+          let base = prev
+          if (fromSelf) {
+            const optimisticIdx = prev.findIndex(
+              (m) =>
+                String(m.message_id).startsWith('local-') &&
+                trimChatId(m.sender_id) === self &&
+                m.content === msg.content,
+            )
+            if (optimisticIdx >= 0) {
+              const oid = prev[optimisticIdx]!.message_id
+              pendingLocalIdsRef.current.delete(oid)
+              base = prev.filter((_, i) => i !== optimisticIdx)
+            }
+          }
+          return [...base, msg]
         })
         return
       }
@@ -179,13 +186,13 @@ export function ApplicationChatDialog({
           peer_user_id?: string | null
           message_ids?: string[]
         }
-        if (trimId(r.project_id) !== trimId(projectIdRef.current)) return
-        if (trimId(r.peer_user_id) !== trimId(peerUserIdRef.current)) return
-        const ids = new Set((r.message_ids ?? []).map((id) => trimId(id)))
+        if (trimChatId(r.project_id) !== trimChatId(projectIdRef.current)) return
+        if (trimChatId(r.peer_user_id) !== trimChatId(peerUserIdRef.current)) return
+        const ids = new Set((r.message_ids ?? []).map((id) => trimChatId(id)))
         if (ids.size === 0) return
         setMessages((prev) =>
           prev.map((m) =>
-            ids.has(trimId(m.message_id)) ? { ...m, is_read: true } : m,
+            ids.has(trimChatId(m.message_id)) ? { ...m, is_read: true } : m,
           ),
         )
       }
@@ -196,7 +203,7 @@ export function ApplicationChatDialog({
     e.preventDefault()
     setSendError(null)
     const trimmed = draft.trim()
-    if (!trimmed) return
+    if (!trimmed || !user?.id) return
 
     const ws = getSocket()
     if (!ws || ws.readyState !== WebSocket.OPEN) {
@@ -204,6 +211,21 @@ export function ApplicationChatDialog({
       return
     }
 
+    const tid = newOptimisticMessageId()
+    pendingLocalIdsRef.current.add(tid)
+    const now = new Date().toISOString()
+    setMessages((prev) => [
+      ...prev,
+      {
+        message_id: tid,
+        project_id: projectId,
+        sender_id: user.id,
+        receiver_id: peerUserId,
+        content: trimmed,
+        created_at: now,
+        is_read: false,
+      },
+    ])
     ws.send(
       JSON.stringify({
         project_id: projectId,
@@ -267,7 +289,7 @@ export function ApplicationChatDialog({
                   <p className="text-sm text-muted-foreground">No messages yet. Say hello!</p>
                 )}
                 {messages.map((m) => {
-                  const mine = m.sender_id === user?.id
+                  const mine = trimChatId(m.sender_id) === trimChatId(user?.id)
                   return (
                     <div
                       key={m.message_id}
@@ -282,7 +304,7 @@ export function ApplicationChatDialog({
                         <p
                           className={`mt-1 text-[10px] opacity-70 ${mine ? 'text-primary-foreground' : 'text-muted-foreground'}`}
                         >
-                          {new Date(m.created_at).toLocaleString()}
+                          {formatSmartDayTime(m.created_at)}
                         </p>
                       )}
                     </div>
@@ -292,29 +314,27 @@ export function ApplicationChatDialog({
               </div>
             </ScrollArea>
 
-            {!loadError && (
-              <form onSubmit={(e) => void handleSubmit(e)} className="mt-3 flex flex-col gap-2">
-                {sendError && (
-                  <p className="text-sm text-destructive">{sendError}</p>
-                )}
-                <Textarea
-                  placeholder={wsReady ? 'Write a message…' : 'Connecting…'}
-                  className="min-h-[72px] resize-none"
-                  value={draft}
-                  disabled={!wsReady}
-                  onChange={(e) => setDraft(e.target.value)}
-                />
-                <div className="flex justify-between gap-2">
-                  <p className="text-xs text-muted-foreground">
-                    {wsReady ? 'Connected' : historyLoaded ? 'Connecting…' : ' '}
-                  </p>
-                  <Button type="submit" size="sm" disabled={!wsReady || !draft.trim()}>
-                    <Send className="mr-2 h-4 w-4" />
-                    Send
-                  </Button>
-                </div>
-              </form>
-            )}
+            <form onSubmit={(e) => void handleSubmit(e)} className="mt-3 flex flex-col gap-2">
+              {sendError && (
+                <p className="text-sm text-destructive">{sendError}</p>
+              )}
+              <Textarea
+                placeholder={wsReady ? 'Write a message…' : 'Connecting…'}
+                className="min-h-[72px] resize-none"
+                value={draft}
+                disabled={!wsReady}
+                onChange={(e) => setDraft(e.target.value)}
+              />
+              <div className="flex justify-between gap-2">
+                <p className="text-xs text-muted-foreground">
+                  {wsReady ? 'Connected' : historyLoaded ? 'Connecting…' : ' '}
+                </p>
+                <Button type="submit" size="sm" disabled={!wsReady || !draft.trim()}>
+                  <Send className="mr-2 h-4 w-4" />
+                  Send
+                </Button>
+              </div>
+            </form>
           </>
         )}
       </DialogContent>

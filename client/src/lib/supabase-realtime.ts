@@ -1,5 +1,6 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js"
 import { API_BASE_URL, SUPABASE_ANON_KEY, SUPABASE_URL, TOKEN_STORAGE_KEY } from "@/lib/api-config"
+import { parseChatTimestamp } from "@/lib/datetime-display"
 
 let cachedClient: SupabaseClient | null = null
 
@@ -96,7 +97,11 @@ export function mapMessageInsertToApplicationMessage(row: Record<string, unknown
   const created = row.created_at
   let createdStr = ""
   if (created instanceof Date) createdStr = created.toISOString()
-  else if (typeof created === "string") createdStr = created
+  else if (typeof created === "string") {
+    const t = created.trim()
+    const d = parseChatTimestamp(t)
+    createdStr = d ? d.toISOString() : t
+  }
   else if (created != null) createdStr = String(created)
 
   return {

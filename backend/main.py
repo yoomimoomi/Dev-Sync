@@ -11,14 +11,15 @@ import jwt
 from fastapi import Depends, FastAPI, HTTPException, status, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
-from jwt.exceptions import InvalidTokenError
+from jwt.exceptions import ExpiredSignatureError, InvalidTokenError
 from starlette.websockets import WebSocketState
 from pydantic import BaseModel
 from pwdlib import PasswordHash
 from pwdlib.exceptions import UnknownHashError
-from sqlalchemy import func, text
+from sqlalchemy import func
 from sqlalchemy.orm import Session, selectinload
 
+from app.datetime_wire import to_iso_utc_z
 from app.db.base import Base, engine, get_db
 from app.models.account import Account
 from app.models.application import Application
@@ -51,26 +52,45 @@ ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "30")
 SECRET_KEY = os.getenv("JWT_SECRET_KEY", "change-this-in-env")
 ALGORITHM = "HS256"
 
+# Supabase Dashboard → Settings → API → JWT Secret (read-only). Used only on the server to mint
+# short-lived Realtime tokens; must NOT match JWT_SECRET_KEY.
+SUPABASE_JWT_SECRET = os.getenv("SUPABASE_JWT_SECRET", "").strip()
+SUPABASE_JWT_ISS = os.getenv("SUPABASE_JWT_ISS", "").strip()
+SUPABASE_REALTIME_TOKEN_MINUTES = int(os.getenv("SUPABASE_REALTIME_TOKEN_MINUTES", "55"))
+
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 password_hash = PasswordHash.recommended()
 logger = logging.getLogger(__name__)
+
+
+def _cors_allow_origins() -> list[str]:
+    """Browser origins allowed for credentialed API calls (Vite dev default + optional LAN/extra from env)."""
+    defaults = ["http://localhost:5173", "http://127.0.0.1:5173"]
+    raw = os.getenv("CORS_ORIGINS", "").strip()
+    if not raw:
+        return defaults
+    extra = [o.strip().rstrip("/") for o in raw.split(",") if o.strip()]
+    seen: set[str] = set()
+    out: list[str] = []
+    for o in defaults + extra:
+        if o not in seen:
+            seen.add(o)
+            out.append(o)
+    return out
+
+
+_CORS_ORIGINS = _cors_allow_origins()
+if len(_CORS_ORIGINS) > 2:
+    logger.info("CORS allow_origins extended: %s", _CORS_ORIGINS)
 
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     """Create tables after `app` exists so import errors never hide `app` from uvicorn."""
     Base.metadata.create_all(bind=engine)
-    # create_all does not add new columns to existing tables; ensure notification.read exists (PostgreSQL).
-    if engine.dialect.name == "postgresql":
-        try:
-            with engine.begin() as conn:
-                conn.execute(
-                    text(
-                        'ALTER TABLE notifications ADD COLUMN IF NOT EXISTS "read" boolean NOT NULL DEFAULT false'
-                    )
-                )
-        except Exception as exc:
-            logger.warning("Could not ensure notifications.read column: %s", exc)
+    # Do not ALTER existing tables here: on Supabase, ADD COLUMN can wait on locks and hit
+    # statement_timeout, spamming logs and slowing startup. If an old DB is missing
+    # notifications."read", run once in the SQL Editor — see backend/README.md.
     yield
 
 
@@ -79,7 +99,7 @@ app.include_router(router)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
+    allow_origins=_CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -89,6 +109,14 @@ app.add_middleware(
 class Token(BaseModel):
     access_token: str
     token_type: str
+
+
+class RealtimeTokenOut(BaseModel):
+    """JWT for Supabase Realtime only (signed with Supabase JWT secret, not the app login secret)."""
+
+    access_token: str
+    token_type: str = "bearer"
+    expires_in: int
 
 
 class TokenData(BaseModel):
@@ -260,6 +288,33 @@ def get_current_user(
 @app.get("/user/me", response_model=AccountRead)
 async def get_me(current_user: Annotated[Account, Depends(get_current_user)]):
     return current_user
+
+
+@app.get("/realtime/token", response_model=RealtimeTokenOut)
+async def supabase_realtime_token(current_user: Annotated[Account, Depends(get_current_user)]):
+    """Return a short-lived JWT that Supabase Realtime accepts for `postgres_changes` RLS.
+
+    Requires `SUPABASE_JWT_SECRET` in the backend environment (copy from Supabase project settings).
+    This does not change Supabase's secret; it only mirrors it server-side so the browser never sees it.
+    """
+    if not SUPABASE_JWT_SECRET:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Realtime token broker is not configured (set SUPABASE_JWT_SECRET in backend/.env).",
+        )
+    uid = current_user.user_id.strip()
+    exp_delta = timedelta(minutes=SUPABASE_REALTIME_TOKEN_MINUTES)
+    expire = datetime.now(timezone.utc) + exp_delta
+    payload: dict[str, object] = {
+        "sub": uid,
+        "role": "authenticated",
+        "exp": expire,
+    }
+    if SUPABASE_JWT_ISS:
+        payload["iss"] = SUPABASE_JWT_ISS
+    raw = jwt.encode(payload, SUPABASE_JWT_SECRET, algorithm=ALGORITHM)
+    token_str = raw.decode("utf-8") if isinstance(raw, bytes) else raw
+    return RealtimeTokenOut(access_token=token_str, expires_in=int(exp_delta.total_seconds()))
 
 
 @app.get("/auth/test-jwt")
@@ -616,7 +671,7 @@ async def create_application(
             db.commit()
             db.refresh(jn)
             ca = jn.created_at
-            created_str_j = ca.isoformat() if ca else ""
+            created_str_j = to_iso_utc_z(ca) or ""
             nid = (jn.notification_id or "").strip()
             notif_app = {
                 "type": "notification",
@@ -842,13 +897,24 @@ async def patch_notifications_read(
 
 @app.websocket("/ws/chat")
 async def websocket_chat(websocket: WebSocket, token: str, db: Session = Depends(get_db)):
+    # If decode fails we close before accept(); Uvicorn logs that as HTTP 403 on the upgrade request.
     try:
         jwt_payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         sub = jwt_payload.get("sub")
-    except InvalidTokenError:
+    except ExpiredSignatureError:
+        logger.warning("WebSocket /ws/chat rejected: access token expired (log in again)")
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
         return
-    except Exception:
+    except InvalidTokenError as exc:
+        logger.warning(
+            "WebSocket /ws/chat rejected: invalid token (%s). "
+            "Check JWT_SECRET_KEY matches the server that issued the token, or clear stale localStorage and re-login.",
+            exc,
+        )
+        await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+        return
+    except Exception as exc:
+        logger.warning("WebSocket /ws/chat rejected: token decode error (%s)", exc)
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
         return
     if not isinstance(sub, str) or not sub.strip():
@@ -966,7 +1032,7 @@ async def websocket_chat(websocket: WebSocket, token: str, db: Session = Depends
                 continue
 
             created_at = new_msg.created_at
-            created_str = created_at.isoformat() if created_at else ""
+            created_str = to_iso_utc_z(created_at) or ""
 
             outbound = {
                 "type": "application_message",
@@ -978,8 +1044,9 @@ async def websocket_chat(websocket: WebSocket, token: str, db: Session = Depends
                 "is_read": new_msg.is_read,
                 "created_at": created_str,
             }
-            peer_online = await chat_manager.send_personal_message(outbound, receiver_id)
+            # Echo to sender first so their UI updates before the peer (lower perceived latency).
             await chat_manager.send_personal_message(outbound, user_id)
+            peer_online = await chat_manager.send_personal_message(outbound, receiver_id)
             await chat_manager.send_personal_message(
                 {
                     "type": "message_receipt",
@@ -1005,7 +1072,7 @@ async def websocket_chat(websocket: WebSocket, token: str, db: Session = Depends
                     db.commit()
                     db.refresh(n)
                     ca = n.created_at
-                    created_str_n = ca.isoformat() if ca else ""
+                    created_str_n = to_iso_utc_z(ca) or ""
                     nid = (n.notification_id or "").strip()
                     notif_out = {
                         "type": "notification",

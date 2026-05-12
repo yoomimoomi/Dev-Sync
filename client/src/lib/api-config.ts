@@ -1,5 +1,15 @@
 export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000'
 
+/** Supabase project URL (e.g. https://xxxx.supabase.co). Optional; enables DB-backed Realtime for messages. */
+export const SUPABASE_URL = (import.meta.env.VITE_SUPABASE_URL as string | undefined)?.trim() ?? ''
+
+/** Supabase anon (public) key. Never use the service role key in the browser. */
+export const SUPABASE_ANON_KEY = (import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined)?.trim() ?? ''
+
+export function isSupabaseRealtimeConfigured(): boolean {
+  return Boolean(SUPABASE_URL && SUPABASE_ANON_KEY)
+}
+
 /** Build ws/wss URL from the HTTP API base (used by applicant-owner chat WebSocket). */
 export function getWebSocketBaseUrl(): string {
   const base = API_BASE_URL.trim()

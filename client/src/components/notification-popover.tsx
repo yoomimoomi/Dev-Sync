@@ -7,6 +7,7 @@ import type { Notification } from "@/lib/mock-data"
 import { API_BASE_URL, readApiErrorMessage, TOKEN_STORAGE_KEY } from "@/lib/api-config"
 import { useAuth } from "@/lib/auth-context"
 import { useChatRealtime } from "@/lib/chat-realtime-context"
+import { formatSmartDayTime } from "@/lib/datetime-display"
 import { cn } from "@/lib/utils"
 
 type ApiNotification = {
@@ -27,10 +28,8 @@ function inferNotificationType(title: string): Notification["type"] {
 }
 
 function formatNotifTime(iso: string | null | undefined): string {
-  if (!iso) return ""
-  const d = new Date(iso)
-  if (Number.isNaN(d.getTime())) return iso
-  return d.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })
+  const s = formatSmartDayTime(iso)
+  return s || (iso?.trim() ?? "")
 }
 
 function mapApiToUi(a: ApiNotification): Notification {

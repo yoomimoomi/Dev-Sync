@@ -1,7 +1,9 @@
 from datetime import datetime
 from typing import Optional
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, field_serializer
+
+from app.datetime_wire import to_iso_utc_z
 
 
 class MessageRead(BaseModel):
@@ -15,6 +17,10 @@ class MessageRead(BaseModel):
     is_read: Optional[bool] = None
     created_at: Optional[datetime] = None
 
+    @field_serializer("created_at")
+    def _ser_created_at(self, v: datetime | None) -> str | None:
+        return to_iso_utc_z(v)
+
 
 class ConversationRead(BaseModel):
     project_id: str
@@ -23,6 +29,10 @@ class ConversationRead(BaseModel):
     peer_name: str
     last_message: Optional[str] = None
     last_message_at: Optional[datetime] = None
+
+    @field_serializer("last_message_at")
+    def _ser_last_message_at(self, v: datetime | None) -> str | None:
+        return to_iso_utc_z(v)
 
 
 class MarkThreadReadResult(BaseModel):
