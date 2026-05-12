@@ -18,6 +18,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
+import { avatarUrl } from "@/lib/api-config"
 import { cn } from "@/lib/utils"
 import { useAuth } from "@/lib/auth-context"
 import { useSearch } from "@/lib/search-context"
@@ -164,9 +165,9 @@ export function Navbar() {
                       size="icon"
                       className="rounded-full border-2 border-primary p-0 overflow-hidden text-primary hover:bg-primary/10"
                     >
-                      {user?.avatar ? (
+                      {user?.avatar_path ? (
                         <img
-                          src={user.avatar}
+                          src={avatarUrl(user.avatar_path)}
                           alt={user?.name ?? "Profile"}
                           className="h-full w-full object-cover"
                         />
