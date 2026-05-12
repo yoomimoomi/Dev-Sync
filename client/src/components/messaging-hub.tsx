@@ -85,11 +85,14 @@ export function MessagingHub() {
 
   // ── Fetch conversation list ──────────────────────────────────────────────────
 
-  const fetchConversations = useCallback(async () => {
+  const fetchConversations = useCallback(async (opts?: { silent?: boolean }) => {
     const token = localStorage.getItem(TOKEN_STORAGE_KEY)
     if (!token) return
-    setConvLoading(true)
-    setConvError(null)
+    const silent = opts?.silent ?? false
+    if (!silent) {
+      setConvLoading(true)
+      setConvError(null)
+    }
     try {
       const res = await fetch(`${API_BASE_URL}/messages/conversations`, {
         headers: { Authorization: `Bearer ${token}` },
@@ -103,7 +106,7 @@ export function MessagingHub() {
     } catch {
       setConvError('Failed to load conversations.')
     } finally {
-      setConvLoading(false)
+      if (!silent) setConvLoading(false)
     }
   }, [])
 
@@ -112,6 +115,14 @@ export function MessagingHub() {
       void fetchConversations()
     }
   }, [isOpen, view, isAuthenticated, fetchConversations])
+
+  useEffect(() => {
+    if (!isOpen || !isAuthenticated) return
+    const timer = window.setInterval(() => {
+      void fetchConversations({ silent: true })
+    }, 4000)
+    return () => window.clearInterval(timer)
+  }, [isOpen, isAuthenticated, fetchConversations])
 
   activeConvRef.current = activeConv
   userRef.current = user
@@ -210,6 +221,43 @@ export function MessagingHub() {
   }, [])
 
   // ── Load history for active chat (shared WebSocket stays open via ChatRealtimeProvider) ──
+  const loadActiveConversationHistory = useCallback(
+    async (conv: ConversationRow, opts?: { markRead?: boolean }) => {
+      const token = localStorage.getItem(TOKEN_STORAGE_KEY)
+      if (!token) {
+        setLoadError('You are not logged in.')
+        return
+      }
+
+      const res = await fetch(
+        `${API_BASE_URL}/messages/application/${encodeURIComponent(conv.project_id)}/${encodeURIComponent(conv.peer_user_id)}`,
+        { headers: { Authorization: `Bearer ${token}` } },
+      )
+      if (!res.ok) {
+        setLoadError(await readApiErrorMessage(res))
+        setHistoryLoaded(true)
+        return
+      }
+      const data = (await res.json()) as ApplicationChatRow[]
+      setMessages(Array.isArray(data) ? data : [])
+      setHistoryLoaded(true)
+      setLoadError(null)
+
+      if (opts?.markRead) {
+        const sock = getSocket()
+        if (sock?.readyState === WebSocket.OPEN) {
+          sock.send(
+            JSON.stringify({
+              type: 'mark_read',
+              project_id: conv.project_id,
+              peer_user_id: conv.peer_user_id,
+            }),
+          )
+        }
+      }
+    },
+    [getSocket],
+  )
 
   useEffect(() => {
     if (!activeConv || !isAuthenticated || !user?.id) {
@@ -217,12 +265,6 @@ export function MessagingHub() {
       setMessages([])
       setLoadError(null)
       setSendError(null)
-      return
-    }
-
-    const token = localStorage.getItem(TOKEN_STORAGE_KEY)
-    if (!token) {
-      setLoadError('You are not logged in.')
       return
     }
 
@@ -234,30 +276,8 @@ export function MessagingHub() {
       setHistoryLoaded(false)
 
       try {
-        const res = await fetch(
-          `${API_BASE_URL}/messages/application/${encodeURIComponent(activeConv.project_id)}/${encodeURIComponent(activeConv.peer_user_id)}`,
-          { headers: { Authorization: `Bearer ${token}` } },
-        )
-        if (!res.ok) {
-          setLoadError(await readApiErrorMessage(res))
-          setHistoryLoaded(true)
-          return
-        }
-        const data = (await res.json()) as ApplicationChatRow[]
+        await loadActiveConversationHistory(activeConv, { markRead: true })
         if (cancelled) return
-        setMessages(Array.isArray(data) ? data : [])
-        setHistoryLoaded(true)
-
-        const sock = getSocket()
-        if (sock?.readyState === WebSocket.OPEN) {
-          sock.send(
-            JSON.stringify({
-              type: 'mark_read',
-              project_id: activeConv.project_id,
-              peer_user_id: activeConv.peer_user_id,
-            }),
-          )
-        }
       } catch {
         if (!cancelled) {
           setLoadError('Failed to load messages.')
@@ -269,7 +289,15 @@ export function MessagingHub() {
     return () => {
       cancelled = true
     }
-  }, [activeConv, isAuthenticated, user?.id, getSocket])
+  }, [activeConv, isAuthenticated, user?.id, loadActiveConversationHistory])
+
+  useEffect(() => {
+    if (!isOpen || view !== 'chat' || !activeConv || !isAuthenticated || !user?.id) return
+    const timer = window.setInterval(() => {
+      void loadActiveConversationHistory(activeConv)
+    }, 3000)
+    return () => window.clearInterval(timer)
+  }, [isOpen, view, activeConv, isAuthenticated, user?.id, loadActiveConversationHistory])
 
   // ── Handlers ─────────────────────────────────────────────────────────────────
 

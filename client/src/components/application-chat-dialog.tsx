@@ -3,6 +3,7 @@
 import {
   type FormEvent,
   type ReactNode,
+  useCallback,
   useEffect,
   useRef,
   useState,
@@ -75,6 +76,44 @@ export function ApplicationChatDialog({
   userRef.current = user
   const pendingLocalIdsRef = useRef<Set<string>>(new Set())
 
+  const loadHistory = useCallback(
+    async (opts?: { markRead?: boolean }) => {
+      const token = localStorage.getItem(TOKEN_STORAGE_KEY)
+      if (!token) {
+        setLoadError('You are not logged in.')
+        return
+      }
+
+      const res = await fetch(
+        `${API_BASE_URL}/messages/application/${encodeURIComponent(projectId)}/${encodeURIComponent(peerUserId)}`,
+        { headers: { Authorization: `Bearer ${token}` } },
+      )
+      if (!res.ok) {
+        setLoadError(await readApiErrorMessage(res))
+        setHistoryLoaded(true)
+        return
+      }
+      const data = (await res.json()) as ApplicationChatRow[]
+      setMessages(Array.isArray(data) ? data : [])
+      setHistoryLoaded(true)
+      setLoadError(null)
+
+      if (opts?.markRead) {
+        const sock = getSocket()
+        if (sock?.readyState === WebSocket.OPEN) {
+          sock.send(
+            JSON.stringify({
+              type: 'mark_read',
+              project_id: projectId,
+              peer_user_id: peerUserId,
+            }),
+          )
+        }
+      }
+    },
+    [projectId, peerUserId, getSocket],
+  )
+
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ block: 'end', behavior: 'auto' })
   }, [messages])
@@ -88,12 +127,6 @@ export function ApplicationChatDialog({
       return
     }
 
-    const token = localStorage.getItem(TOKEN_STORAGE_KEY)
-    if (!token) {
-      setLoadError('You are not logged in.')
-      return
-    }
-
     let cancelled = false
 
     ;(async () => {
@@ -102,30 +135,8 @@ export function ApplicationChatDialog({
       setHistoryLoaded(false)
 
       try {
-        const res = await fetch(
-          `${API_BASE_URL}/messages/application/${encodeURIComponent(projectId)}/${encodeURIComponent(peerUserId)}`,
-          { headers: { Authorization: `Bearer ${token}` } },
-        )
-        if (!res.ok) {
-          setLoadError(await readApiErrorMessage(res))
-          setHistoryLoaded(true)
-          return
-        }
-        const data = (await res.json()) as ApplicationChatRow[]
+        await loadHistory({ markRead: true })
         if (cancelled) return
-        setMessages(Array.isArray(data) ? data : [])
-        setHistoryLoaded(true)
-
-        const sock = getSocket()
-        if (sock?.readyState === WebSocket.OPEN) {
-          sock.send(
-            JSON.stringify({
-              type: 'mark_read',
-              project_id: projectId,
-              peer_user_id: peerUserId,
-            }),
-          )
-        }
       } catch {
         if (!cancelled) {
           setLoadError('Failed to load messages.')
@@ -137,7 +148,15 @@ export function ApplicationChatDialog({
     return () => {
       cancelled = true
     }
-  }, [open, isAuthenticated, user?.id, projectId, peerUserId, getSocket])
+  }, [open, isAuthenticated, user?.id, loadHistory])
+
+  useEffect(() => {
+    if (!open || !isAuthenticated || !user?.id) return
+    const timer = window.setInterval(() => {
+      void loadHistory()
+    }, 3000)
+    return () => window.clearInterval(timer)
+  }, [open, isAuthenticated, user?.id, loadHistory])
 
   useEffect(() => {
     if (!open || !isAuthenticated || !user?.id) return
