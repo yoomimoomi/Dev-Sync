@@ -1,22 +1,44 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Navbar } from '@/components/navbar'
 import { ProjectCard, type Project } from '@/components/project-card'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Mail, Calendar, Edit, User } from 'lucide-react'
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Textarea } from '@/components/ui/textarea'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import { Mail, Calendar, Edit, User, Camera } from 'lucide-react'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000'
 const TOKEN_STORAGE_KEY = 'devsync_access_token'
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL ?? 'https://mdacciknqnhpqswwishp.supabase.co'
+
+const GRADE_OPTIONS = ['Freshman', 'Sophomore', 'Junior', 'Senior', 'Graduate']
 
 type Profile = {
   user_id: string
   name: string
   email: string
   grade: string | null
+  bio: string | null
   roles: string[]
   skills: string[]
   technologies: string[]
+  avatar_path?: string | null
 }
 
 function initials(name: string) {
@@ -29,9 +51,40 @@ function initials(name: string) {
     .toUpperCase()
 }
 
+async function uploadAvatar(token: string, file: File): Promise<string> {
+  const form = new FormData()
+  form.append('file', file)
+  const res = await fetch(`${API_BASE_URL}/user/me/avatar`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}` },
+    body: form,
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    const detail = typeof err.detail === 'string' ? err.detail : JSON.stringify(err.detail ?? err)
+    throw new Error(detail || `Upload failed (${res.status})`)
+  }
+  const data = await res.json()
+  return data as string
+}
+
 export function ProfilePage() {
   const [projects, setProjects] = useState<Project[]>([])
   const [profile, setProfile] = useState<Profile | null>(null)
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null)
+
+  const [editOpen, setEditOpen] = useState(false)
+  const [firstName, setFirstName] = useState('')
+  const [lastName, setLastName] = useState('')
+  const [email, setEmail] = useState('')
+  const [grade, setGrade] = useState('')
+  const [bio, setBio] = useState('')
+  const [picturePreview, setPicturePreview] = useState<string | null>(null)
+  const [pictureFile, setPictureFile] = useState<File | null>(null)
+  const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
+
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     const fetchProfilePageData = async () => {
@@ -56,12 +109,88 @@ export function ProfilePage() {
 
         setProfile(profileData)
         setProjects(projectData)
+        setAvatarUrl(
+          profileData.avatar_path
+            ? `${SUPABASE_URL}/storage/v1/object/public/${profileData.avatar_path}`
+            : null
+        )
       } catch (error) {
         console.error('Error fetching profile page data:', error)
       }
     }
     fetchProfilePageData()
   }, [])
+
+  const openEditDialog = () => {
+    if (!profile) return
+    const parts = profile.name.trim().split(' ')
+    setFirstName(parts[0] ?? '')
+    setLastName(parts.slice(1).join(' '))
+    setEmail(profile.email)
+    setGrade(profile.grade ?? '')
+    setBio(profile.bio ?? '')
+    setPicturePreview(avatarUrl)
+    setPictureFile(null)
+    setSaveError(null)
+    setEditOpen(true)
+  }
+
+  const handlePictureChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setPictureFile(file)
+    const reader = new FileReader()
+    reader.onload = (ev) => {
+      setPicturePreview(ev.target?.result as string)
+    }
+    reader.readAsDataURL(file)
+  }
+
+  const handleSave = async () => {
+    if (!profile) return
+    setSaving(true)
+    setSaveError(null)
+
+    try {
+      const token = localStorage.getItem(TOKEN_STORAGE_KEY)
+      const fullName = [firstName.trim(), lastName.trim()].filter(Boolean).join(' ')
+
+      const body: Record<string, string | null> = {}
+      if (fullName !== profile.name) body.name = fullName
+      if (email !== profile.email) body.email = email
+      if ((grade || null) !== profile.grade) body.grade = grade || null
+      if ((bio.trim() || null) !== profile.bio) body.bio = bio.trim() || null
+
+      if (Object.keys(body).length > 0) {
+        const res = await fetch(`${API_BASE_URL}/user/me`, {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify(body),
+        })
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}))
+          throw new Error(err.detail ?? 'Failed to update profile')
+        }
+        const updated: Profile = await res.json()
+        setProfile(updated)
+      }
+
+      if (pictureFile && token) {
+        const avatarPath= await uploadAvatar(token, pictureFile)
+        setAvatarUrl(`${SUPABASE_URL}/storage/v1/object/public/${avatarPath}`)
+        setProfile((prev) => (prev ? { ...prev, avatar_path: avatarPath } : prev))
+      }
+
+      setEditOpen(false)
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : 'Something went wrong')
+    } finally {
+      setSaving(false)
+    }
+  }
 
   const profileTags = profile ? [...profile.roles, ...profile.skills, ...profile.technologies] : []
 
@@ -74,14 +203,23 @@ export function ProfilePage() {
             <Card>
               <CardContent className="pt-6">
                 <div className="flex flex-col items-center text-center">
-                  <div className="flex h-24 w-24 items-center justify-center rounded-full bg-primary/10 text-4xl font-bold text-primary">
-                    {profile ? initials(profile.name) : '??'}
+                  <div className="relative flex h-24 w-24 items-center justify-center rounded-full bg-primary/10 text-4xl font-bold text-primary overflow-hidden">
+                    {avatarUrl ? (
+                      <img
+                        src={avatarUrl}
+                        alt="Profile"
+                        className="h-full w-full object-cover"
+                        onError={() => setAvatarUrl(null)}
+                      />
+                    ) : (
+                      profile ? initials(profile.name) : '??'
+                    )}
                   </div>
                   <h1 className="mt-4 text-xl font-bold text-foreground">{profile?.name ?? 'Profile'}</h1>
                   <p className="mt-2 text-sm text-muted-foreground">
                     {profile?.grade ? `${profile.grade} developer` : 'Logged-in DevSync user'}
                   </p>
-                  <Button className="mt-4 w-full" variant="outline">
+                  <Button className="mt-4 w-full" variant="outline" onClick={openEditDialog}>
                     <Edit className="mr-2 h-4 w-4" />
                     Edit Profile
                   </Button>
@@ -102,6 +240,9 @@ export function ProfilePage() {
                       {profile?.grade ? `Grade: ${profile.grade}` : 'Grade not set'}
                     </span>
                   </div>
+                  <p className="text-sm text-muted-foreground whitespace-pre-wrap">
+                    {profile?.bio || 'No bio yet'}
+                  </p>
                 </div>
               </CardContent>
             </Card>
@@ -154,9 +295,9 @@ export function ProfilePage() {
             </div>
 
             <div className="space-y-4">
-                {projects.map((project) => (
-                  <ProjectCard key={project.project_id} project={project} />
-                ))}
+              {projects.map((project) => (
+                <ProjectCard key={project.project_id} project={project} />
+              ))}
             </div>
 
             {projects.length === 0 && (
@@ -172,6 +313,122 @@ export function ProfilePage() {
           </div>
         </div>
       </main>
+
+      <Dialog open={editOpen} onOpenChange={setEditOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Edit Profile</DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-5 py-2">
+            {/* Profile picture */}
+            <div className="flex flex-col items-center gap-3">
+              <div
+                className="relative flex h-24 w-24 cursor-pointer items-center justify-center rounded-full bg-primary/10 text-4xl font-bold text-primary overflow-hidden ring-2 ring-border hover:ring-primary transition-all"
+                onClick={() => fileInputRef.current?.click()}
+              >
+                {picturePreview ? (
+                  <img src={picturePreview} alt="Preview" className="h-full w-full object-cover" />
+                ) : (
+                  <span>{firstName || lastName ? initials(`${firstName} ${lastName}`) : '??'}</span>
+                )}
+                <div className="absolute inset-0 flex items-center justify-center rounded-full bg-black/40 opacity-0 hover:opacity-100 transition-opacity">
+                  <Camera className="h-6 w-6 text-white" />
+                </div>
+              </div>
+              <button
+                type="button"
+                className="text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground"
+                onClick={() => fileInputRef.current?.click()}
+              >
+                Change picture
+              </button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={handlePictureChange}
+              />
+            </div>
+
+            {/* Name row */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="firstName">First name</Label>
+                <Input
+                  id="firstName"
+                  value={firstName}
+                  onChange={(e) => setFirstName(e.target.value)}
+                  placeholder="First"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="lastName">Last name</Label>
+                <Input
+                  id="lastName"
+                  value={lastName}
+                  onChange={(e) => setLastName(e.target.value)}
+                  placeholder="Last"
+                />
+              </div>
+            </div>
+
+            {/* Email */}
+            <div className="space-y-1.5">
+              <Label htmlFor="email">Email</Label>
+              <Input
+                id="email"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="you@example.com"
+              />
+            </div>
+
+            {/* Grade */}
+            <div className="space-y-1.5">
+              <Label>Grade</Label>
+              <Select value={grade} onValueChange={setGrade}>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Select grade" />
+                </SelectTrigger>
+                <SelectContent>
+                  {GRADE_OPTIONS.map((g) => (
+                    <SelectItem key={g} value={g}>
+                      {g}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="bio">Bio</Label>
+              <Textarea
+                id="bio"
+                value={bio}
+                onChange={(e) => setBio(e.target.value)}
+                placeholder="Tell others about yourself..."
+                className="min-h-[96px]"
+              />
+            </div>
+
+            {saveError && (
+              <p className="text-sm text-destructive">{saveError}</p>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditOpen(false)} disabled={saving}>
+              Cancel
+            </Button>
+            <Button onClick={handleSave} disabled={saving}>
+              {saving ? 'Saving…' : 'Save changes'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

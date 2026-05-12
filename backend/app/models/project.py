@@ -1,7 +1,7 @@
 import datetime
 from typing import Optional, TYPE_CHECKING
 
-from sqlalchemy import String, ForeignKeyConstraint, PrimaryKeyConstraint, Text, DateTime, text
+from sqlalchemy import String, ForeignKeyConstraint, PrimaryKeyConstraint, Text, DateTime, text, Boolean
 from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.ext.associationproxy import association_proxy, AssociationProxy
@@ -28,11 +28,12 @@ class Project(Base):
     skills: Mapped[Optional[list[str]]] = mapped_column(ARRAY(String(length=20)))
     technologies: Mapped[Optional[list[str]]] = mapped_column(ARRAY(String(length=20)))
     created_at: Mapped[Optional[datetime.datetime]] = mapped_column(DateTime, server_default=text('CURRENT_TIMESTAMP'))
+    is_deleted: Mapped[Optional[bool]] = mapped_column(Boolean, server_default=text('FALSE'))
 
     owner: Mapped[Optional['Account']] = relationship('Account', back_populates='projects')
     owner_name: AssociationProxy[Optional[str]] = association_proxy('owner', 'name')
-    applications: Mapped[list['Application']] = relationship('Application', back_populates='project')
-    comments: Mapped[list['Comment']] = relationship('Comment', back_populates='project')
+    applications: Mapped[list['Application']] = relationship('Application', back_populates='project', passive_deletes=True)
+    comments: Mapped[list['Comment']] = relationship('Comment', back_populates='project', passive_deletes=True)
 
     @property
     def applicant_user_names(self) -> list[Optional[str]]:

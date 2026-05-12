@@ -5,7 +5,7 @@ from typing import Annotated
 from app.models.project import Project
 
 import jwt
-from fastapi import Depends, FastAPI, HTTPException, status
+from fastapi import Depends, FastAPI, File, HTTPException, UploadFile, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from jwt.exceptions import InvalidTokenError
@@ -19,10 +19,13 @@ from app.models.account import Account
 from app.models.application import Application
 from app.models.comment import Comment
 from app.routes import router
-from app.schemas.account import AccountCreate, AccountRead
+from app.supabase_bucket_storage import upload_avatar
+from app.schemas.account import AccountCreate, AccountRead, AccountUpdate
 from app.schemas.application import ApplicationCreate, ApplicationRead, ProjectOwnerView
 from app.schemas.comment import CommentCreate, CommentRead
 from app.schemas.projects import ProjectCreate, ProjectRead
+from app.schemas.notification import NotificationCreate , NotificationRead
+from app.models.notification import Notification
 
 
 ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "30"))
@@ -57,6 +60,10 @@ class TokenData(BaseModel):
 class PasswordVerifyRequest(BaseModel):
     password: str
     hashed_password: str
+
+
+_AVATAR_MAX_BYTES = 5 * 1024 * 1024
+_AVATAR_ALLOWED_TYPES = frozenset({"image/jpeg", "image/png", "image/webp", "image/gif"})
 
 
 @app.get("/")
@@ -159,6 +166,61 @@ async def get_me(current_user: Annotated[Account, Depends(get_current_user)]):
     return current_user
 
 
+@app.patch("/user/me", response_model=AccountRead)
+async def update_me(
+    update: AccountUpdate,
+    current_user: Annotated[Account, Depends(get_current_user)],
+    db: Session = Depends(get_db),
+):
+    if update.name is not None:
+        current_user.name = update.name
+    if update.email is not None:
+        conflict = (
+            db.query(Account)
+            .filter(Account.email == update.email, Account.user_id != current_user.user_id)
+            .first()
+        )
+        if conflict:
+            raise HTTPException(status_code=400, detail="Email already in use")
+        current_user.email = update.email
+    if "grade" in update.model_fields_set:
+        current_user.grade = update.grade
+    if "bio" in update.model_fields_set:
+        current_user.bio = update.bio
+    db.commit()
+    db.refresh(current_user)
+    return current_user
+
+
+@app.post("/user/me/avatar")
+async def upload_my_avatar(
+    current_user: Annotated[Account, Depends(get_current_user)],
+    db: Session = Depends(get_db),
+    file: UploadFile = File(...),
+):
+    if not file.content_type or file.content_type not in _AVATAR_ALLOWED_TYPES:
+        raise HTTPException(
+            status_code=400,
+            detail="File must be an image (jpeg, png, webp, or gif)",
+        )
+    data = await file.read()
+    if len(data) > _AVATAR_MAX_BYTES:
+        raise HTTPException(status_code=400, detail="Image must be 5MB or smaller")
+    try:
+        avatar_path = upload_avatar(
+            current_user.user_id,
+            data,
+            file.content_type,
+        )
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+    current_user.avatar_path = avatar_path
+    db.commit()
+    db.refresh(current_user)
+    return avatar_path
+
+
 @app.get("/auth/test-jwt")
 async def test_jwt_auth(current_user: Annotated[Account, Depends(get_current_user)]):
     return {
@@ -207,6 +269,7 @@ async def create_user(user_in: AccountCreate, db: Session = Depends(get_db)):
 async def get_projects(db: Session = Depends(get_db)):
     projects = (
         db.query(Project)
+        .filter(Project.is_deleted == False)
         .options(
             selectinload(Project.owner),
             selectinload(Project.applications).selectinload(Application.user),
@@ -225,6 +288,7 @@ async def get_my_projects(
     projects = (
         db.query(Project)
         .filter(Project.user_id == current_user.user_id)
+        .filter(Project.is_deleted == False)
         .options(
             selectinload(Project.owner),
             selectinload(Project.applications).selectinload(Application.user),
@@ -240,6 +304,7 @@ async def get_project_by_id(project_id: str, db: Session = Depends(get_db)):
     project = (
         db.query(Project)
         .filter(Project.project_id == project_id)
+        .filter(Project.is_deleted == False)
         .options(
             selectinload(Project.owner),
             selectinload(Project.applications).selectinload(Application.user),
@@ -254,7 +319,17 @@ async def get_project_by_id(project_id: str, db: Session = Depends(get_db)):
 
 @app.get("/projects/user/{user_id}", response_model=list[ProjectRead])
 async def get_projects_by_user_id(user_id: str, db: Session = Depends(get_db)):
-    projects = db.query(Project).filter(Project.user_id == user_id).all()
+    projects = (
+        db.query(Project)
+    .filter(Project.user_id == user_id)
+    .filter(Project.is_deleted == False)
+    .options(
+        selectinload(Project.owner),
+        selectinload(Project.applications).selectinload(Application.user),
+        selectinload(Project.comments).selectinload(Comment.user),
+    )
+    .all()
+    )
     return projects
 
 
@@ -278,6 +353,18 @@ async def create_project(project_in: ProjectCreate, current_user: Annotated[Acco
     return new_project
 
 
+@app.patch("/project/{project_id}", status_code=204)
+async def delete_project(project_id: str, current_user: Annotated[Account, Depends(get_current_user)], db: Session = Depends(get_db)):
+    project = db.query(Project).filter(Project.project_id == project_id).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    if project.user_id != current_user.user_id:
+        raise HTTPException(status_code=403, detail="You are not the owner of this project")
+    project.is_deleted = True
+    db.commit()
+    db.refresh(project)
+
+
 @app.get("/applications/my-projects", response_model=list[ProjectOwnerView])
 async def get_applications_to_my_projects(
     current_user: Annotated[Account, Depends(get_current_user)],
@@ -287,6 +374,7 @@ async def get_applications_to_my_projects(
         db.query(
             Application.user_id,
             Account.name.label("user_name"),
+            Account.avatar_path.label("user_avatar"),
             Application.project_id,
             Project.title.label("project_title"),
             Application.status,
@@ -295,6 +383,8 @@ async def get_applications_to_my_projects(
         .join(Account, Account.user_id == Application.user_id)
         .join(Project, Project.project_id == Application.project_id)
         .filter(Project.user_id == current_user.user_id)
+        .filter(Project.is_deleted == False)
+        .filter(Application.status == "Pending")
         .order_by(Application.created_at.desc())
         .all()
     )
@@ -302,6 +392,7 @@ async def get_applications_to_my_projects(
         {
             "user_id": r.user_id,
             "user_name": r.user_name,
+            "user_avatar": r.user_avatar,
             "project_id": r.project_id,
             "project_title": r.project_title,
             "status": r.status,
@@ -313,16 +404,138 @@ async def get_applications_to_my_projects(
 
 @app.get("/applications/user/{user_id}", response_model=list[ApplicationRead])
 async def get_applications_by_user_id(user_id: str, db: Session = Depends(get_db)):
-    applications = db.query(Application).filter(Application.user_id == user_id).all()
+    applications = (
+        db.query(Application)
+        .join(Project, Project.project_id == Application.project_id)
+        .filter(Application.user_id == user_id)
+        .filter(Project.is_deleted == False)
+        .all()
+    )
     return applications
 
+
+@app.patch("/applications/{project_id}/{user_id}/accept", response_model=ApplicationRead)
+async def accept_application(
+    project_id: str,
+    user_id: str,
+    current_user: Annotated[Account, Depends(get_current_user)],
+    db: Session = Depends(get_db),
+):
+    project = (
+        db.query(Project)
+        .filter(Project.project_id == project_id)
+        .filter(Project.is_deleted == False)
+        .first()
+    )
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    if project.user_id != current_user.user_id:
+        raise HTTPException(status_code=403, detail="Not allowed to manage this project")
+
+    application = (
+        db.query(Application)
+        .filter(
+            Application.project_id == project_id,
+            Application.user_id == user_id,
+        )
+        .first()
+    )
+    if not application:
+        raise HTTPException(status_code=404, detail="Application not found")
+
+    application.status = "Accepted"
+    db.commit()
+    db.refresh(application)
+    return application
+
+
+@app.patch("/applications/{project_id}/{user_id}/decline", response_model=ApplicationRead)
+async def decline_application(
+    project_id: str,
+    user_id: str,
+    current_user: Annotated[Account, Depends(get_current_user)],
+    db: Session = Depends(get_db),
+):
+    project = (
+        db.query(Project)
+        .filter(Project.project_id == project_id)
+        .filter(Project.is_deleted == False)
+        .first()
+    )
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    if project.user_id != current_user.user_id:
+        raise HTTPException(status_code=403, detail="Not allowed to manage this project")
+
+    application = (
+        db.query(Application)
+        .filter(
+            Application.project_id == project_id,
+            Application.user_id == user_id,
+        )
+        .first()
+    )
+    if not application:
+        raise HTTPException(status_code=404, detail="Application not found")
+
+    application.status = "Declined"
+    db.commit()
+    db.refresh(application)
+    return application
+
+
 @app.post("/application", response_model=ApplicationRead)
-async def create_application(application_in: ApplicationCreate, current_user: Annotated[Account, Depends(get_current_user)], db: Session = Depends(get_db)):
+async def create_application(
+    application_in: ApplicationCreate,
+    current_user: Annotated[Account, Depends(get_current_user)],
+    db: Session = Depends(get_db),
+):
+    if application_in.user_id and application_in.user_id != current_user.user_id:
+        raise HTTPException(
+            status_code=400,
+            detail="Submitted user_id does not match authenticated user",
+        )
+
+    if application_in.status and application_in.status.lower() != "pending":
+        raise HTTPException(
+            status_code=400,
+            detail="Initial application status must be Pending",
+        )
+
+    project = (
+        db.query(Project)
+        .filter(Project.project_id == application_in.project_id)
+        .filter(Project.is_deleted == False)
+        .first()
+    )
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    if project.user_id == current_user.user_id:
+        raise HTTPException(
+            status_code=400,
+            detail="You cannot apply to your own project",
+        )
+
+    existing = (
+        db.query(Application)
+        .filter(
+            Application.user_id == current_user.user_id,
+            Application.project_id == application_in.project_id,
+        )
+        .first()
+    )
+    if existing:
+        raise HTTPException(
+            status_code=400,
+            detail="You already have an application for this project",
+        )
+
     new_application = Application(
         user_id=current_user.user_id,
         project_id=application_in.project_id,
         status="Pending",
-        content=application_in.content,
+        content=application_in.content.strip(),
     )
     db.add(new_application)
     db.commit()
@@ -336,7 +549,12 @@ async def create_comment(
     current_user: Annotated[Account, Depends(get_current_user)],
     db: Session = Depends(get_db),
 ):
-    project = db.query(Project).filter(Project.project_id == comment_in.project_id).first()
+    project = (
+        db.query(Project)
+        .filter(Project.project_id == comment_in.project_id)
+        .filter(Project.is_deleted == False)
+        .first()
+    )
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
 
@@ -371,3 +589,23 @@ async def create_comment(
         .options(selectinload(Comment.user))
         .first()
     )
+@app.get("/notifications/{user_id}", response_model= list[NotificationRead])
+async def get_notifications_by_user_id(user_id: str, db: Session = Depends(get_db)):
+    notifications = db.query(Notification).filter(Notification.user_id == user_id).all()
+    return notifications
+
+@app.post("/notification", response_model= NotificationRead)
+async def create_notifications(notification_in: NotificationCreate,
+    current_user: Annotated[Account, Depends(get_current_user)],
+    db: Session = Depends(get_db),
+):
+    new_notification = Notification(
+        user_id=current_user.user_id,
+        project_id=notification_in.project_id,
+        title=notification_in.title,
+        content=notification_in.content,
+    )
+    db.add(new_notification)
+    db.commit()
+    db.refresh(new_notification)
+    return new_notification
