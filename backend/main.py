@@ -84,6 +84,11 @@ _CORS_ORIGINS = _cors_allow_origins()
 if len(_CORS_ORIGINS) > 2:
     logger.info("CORS allow_origins extended: %s", _CORS_ORIGINS)
 
+# Optional regex for ephemeral origins (e.g. Vercel preview deploys at
+# `https://<project>-<hash>-<scope>.vercel.app`). Set CORS_ORIGIN_REGEX to a
+# Python regex string in the backend env to allow them; leave empty to disable.
+_CORS_ORIGIN_REGEX = os.getenv("CORS_ORIGIN_REGEX", "").strip() or None
+
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
@@ -101,6 +106,7 @@ app.include_router(router)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_CORS_ORIGINS,
+    allow_origin_regex=_CORS_ORIGIN_REGEX,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
