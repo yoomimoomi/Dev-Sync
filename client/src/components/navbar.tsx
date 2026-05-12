@@ -1,7 +1,6 @@
 import { useState, useEffect } from "react"
 import { Link, useLocation, useNavigate } from "react-router-dom"
 import { Search, User, LogOut, LogIn, X, Moon, Sun } from "lucide-react"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { NotificationPopover } from "@/components/notification-popover"
@@ -19,7 +18,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import { avatarUrl } from "@/lib/api-config"
 import { cn } from "@/lib/utils"
 import { useAuth } from "@/lib/auth-context"
 import { useSearch } from "@/lib/search-context"
@@ -164,22 +162,9 @@ export function Navbar() {
                     <Button
                       variant="ghost"
                       size="icon"
-                      className="rounded-full border-2 border-primary text-primary hover:bg-primary/10 p-0 overflow-hidden"
+                      className="rounded-full border-2 border-primary text-primary hover:bg-primary/10"
                     >
-                      <Avatar className="h-8 w-8">
-                        <AvatarImage src={avatarUrl(user?.avatar_path)} alt={user?.name ?? "Profile"} />
-                        <AvatarFallback className="bg-primary/10 text-primary text-xs">
-                          {user?.name
-                            ? user.name
-                                .split(" ")
-                                .filter(Boolean)
-                                .map((part) => part[0])
-                                .join("")
-                                .slice(0, 2)
-                                .toUpperCase()
-                            : "?"}
-                        </AvatarFallback>
-                      </Avatar>
+                      <User className="h-5 w-5" />
                       <span className="sr-only">Profile</span>
                     </Button>
                   </DropdownMenuTrigger>

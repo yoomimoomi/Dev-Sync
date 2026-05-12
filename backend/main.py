@@ -25,8 +25,7 @@ from app.models.account import Account
 from app.models.application import Application
 from app.models.comment import Comment
 from app.routes import router
-from app.supabase_bucket_storage import upload_avatar
-from app.schemas.account import AccountCreate, AccountRead, AccountUpdate
+from app.schemas.account import AccountCreate, AccountRead
 from app.schemas.application import ApplicationCreate, ApplicationRead, ProjectOwnerView
 from app.schemas.comment import CommentCreate, CommentRead
 from app.schemas.projects import ProjectCreate, ProjectRead
@@ -190,10 +189,6 @@ class ChatManager:
 chat_manager = ChatManager()
     
     
-_AVATAR_MAX_BYTES = 5 * 1024 * 1024
-_AVATAR_ALLOWED_TYPES = frozenset({"image/jpeg", "image/png", "image/webp", "image/gif"})
-
-
 @app.get("/")
 async def root():
     return {"message": "Devsync in progress"}
@@ -320,59 +315,6 @@ async def supabase_realtime_token(current_user: Annotated[Account, Depends(get_c
     raw = jwt.encode(payload, SUPABASE_JWT_SECRET, algorithm=ALGORITHM)
     token_str = raw.decode("utf-8") if isinstance(raw, bytes) else raw
     return RealtimeTokenOut(access_token=token_str, expires_in=int(exp_delta.total_seconds()))
-@app.patch("/user/me", response_model=AccountRead)
-async def update_me(
-    update: AccountUpdate,
-    current_user: Annotated[Account, Depends(get_current_user)],
-    db: Session = Depends(get_db),
-):
-    if update.name is not None:
-        current_user.name = update.name
-    if update.email is not None:
-        conflict = (
-            db.query(Account)
-            .filter(Account.email == update.email, Account.user_id != current_user.user_id)
-            .first()
-        )
-        if conflict:
-            raise HTTPException(status_code=400, detail="Email already in use")
-        current_user.email = update.email
-    if "grade" in update.model_fields_set:
-        current_user.grade = update.grade
-    if "bio" in update.model_fields_set:
-        current_user.bio = update.bio
-    db.commit()
-    db.refresh(current_user)
-    return current_user
-
-
-@app.post("/user/me/avatar")
-async def upload_my_avatar(
-    current_user: Annotated[Account, Depends(get_current_user)],
-    db: Session = Depends(get_db),
-    file: UploadFile = File(...),
-):
-    if not file.content_type or file.content_type not in _AVATAR_ALLOWED_TYPES:
-        raise HTTPException(
-            status_code=400,
-            detail="File must be an image (jpeg, png, webp, or gif)",
-        )
-    data = await file.read()
-    if len(data) > _AVATAR_MAX_BYTES:
-        raise HTTPException(status_code=400, detail="Image must be 5MB or smaller")
-    try:
-        avatar_path = upload_avatar(
-            current_user.user_id,
-            data,
-            file.content_type,
-        )
-    except RuntimeError as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
-
-    current_user.avatar_path = avatar_path
-    db.commit()
-    db.refresh(current_user)
-    return avatar_path
 
 
 @app.get("/auth/test-jwt")
@@ -528,7 +470,6 @@ async def get_applications_to_my_projects(
         db.query(
             Application.user_id,
             Account.name.label("user_name"),
-            Account.avatar_path.label("user_avatar"),
             Application.project_id,
             Project.title.label("project_title"),
             Application.status,
@@ -546,7 +487,6 @@ async def get_applications_to_my_projects(
         {
             "user_id": r.user_id,
             "user_name": r.user_name,
-            "user_avatar": r.user_avatar,
             "project_id": r.project_id,
             "project_title": r.project_title,
             "status": r.status,

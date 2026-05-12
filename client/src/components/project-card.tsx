@@ -2,14 +2,13 @@ import { Link } from "react-router-dom"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent } from "@/components/ui/card"
-import { avatarUrl } from "@/lib/api-config"
 
 export interface Project {
   project_id: string
-  owner: {
-    name: string
-    avatar_path?: string | null
-  }
+  owner?: {
+    user_id?: string
+    name?: string
+  } | null
   title: string
   description: string
   status: string
@@ -32,7 +31,6 @@ export interface Project {
     created_at: string | null
     user: {
       name: string
-      avatar_path?: string | null
     } | null
   }>
 }
@@ -70,7 +68,7 @@ export function ProjectCard({ project }: ProjectCardProps) {
           <div className="flex items-start justify-between gap-4">
             <div className="flex items-center gap-3">
               <Avatar className="h-10 w-10">
-                <AvatarImage src={avatarUrl(project.owner.avatar_path)} alt={project.owner.name} />
+                <AvatarImage src="" alt={ownerName} />
                 <AvatarFallback className="bg-muted text-muted-foreground">
                   {ownerName.slice(0, 2).toUpperCase()}
                 </AvatarFallback>

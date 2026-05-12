@@ -1,13 +1,13 @@
+from pydantic import BaseModel, EmailStr,Field, ConfigDict
+from typing import List, Optional
 from datetime import datetime
-from typing import Any, List, Optional
-
-from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
+from sqlalchemy import String
 
 
 class AccountCreate(BaseModel):
     name : str = Field( ..., max_length=50)
     email : EmailStr
-    password: str = Field(..., min_length=8)
+    password : str = Field(String,min_length=8)
     grade: Optional[str] = Field(None, max_length=10)
     roles : List[str] = []
     skills : List[str] = []
@@ -17,8 +17,6 @@ class AccountCreate(BaseModel):
 
 
 class AccountRead(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-
     user_id: str
     name: str
     email: str
@@ -27,7 +25,5 @@ class AccountRead(BaseModel):
     skills: List[str] = []
     technologies: List[str] = []
 
-    @field_validator("roles", "skills", "technologies", mode="before")
-    @classmethod
-    def array_columns_none_to_list(cls, v: Any) -> list:
-        return v if v is not None else []
+    class Config:
+        from_attributes=True
