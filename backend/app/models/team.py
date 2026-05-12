@@ -8,7 +8,7 @@ from app.db.base import Base
 if TYPE_CHECKING:
     from app.models.account import Account
     from app.models.project import Project
-
+    from app.models.message import Message
 
 class Team(Base):
     __tablename__ = 'teams'
@@ -30,3 +30,4 @@ class Team(Base):
     #     secondary="accountteams",
     #     back_populates="joined_teams"
     # )
+    messages: Mapped[list["Message"]] = relationship("Message")

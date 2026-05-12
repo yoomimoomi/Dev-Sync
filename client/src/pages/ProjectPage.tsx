@@ -9,8 +9,8 @@ import { type Project } from '@/components/project-card'
 import { CommentSection } from '@/components/comment-section'
 import { JoinRequestDialog } from '@/components/join-request-dialog'
 import { Button } from '@/components/ui/button'
-import { openChatHub } from '@/lib/api-config'
 import type { Comment } from '@/lib/mock-data'
+import { avatarUrl } from '@/lib/api-config'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000'
 
@@ -89,14 +89,10 @@ export function ProjectPage() {
   const projectComments: Comment[] = project.comments.map((comment) => ({
     id: `${comment.user_id}-${comment.project_id}`,
     projectId: comment.project_id,
-    author: { name: comment.user?.name ?? 'Unknown User' },
+    author: { name: comment.user?.name ?? 'Unknown User', avatar_path: comment.user?.avatar_path },
     content: comment.content ?? '',
     createdAt: comment.created_at ?? '',
   }))
-
-  const ownerName = project.owner?.name?.trim() || 'Unknown'
-  const ownerUserId = project.owner?.user_id
-  const acceptedMembers = project.accepted_team_members ?? []
 
   return (
     <div className="min-h-screen bg-background">
@@ -139,33 +135,16 @@ export function ProjectPage() {
                 <div className="flex flex-wrap gap-4">
                   <div className="flex items-center gap-3">
                     <Avatar>
-                      <AvatarImage src="" alt={ownerName} />
+                      <AvatarImage src={avatarUrl(project.owner.avatar_path)} alt={project.owner.name} />
                       <AvatarFallback className="bg-primary text-primary-foreground">
-                        {ownerName.slice(0, 2).toUpperCase()}
+                        {project.owner.name.slice(0, 2).toUpperCase()}
                       </AvatarFallback>
                     </Avatar>
                     <div>
-                      <p className="text-sm font-medium">{ownerName}</p>
+                      <p className="text-sm font-medium">{project.owner.name}</p>
                       <p className="text-xs text-muted-foreground">Project Lead</p>
                     </div>
                   </div>
-                  {acceptedMembers.map((member) => {
-                    const display = member.name?.trim() || member.email?.trim() || 'Member'
-                    return (
-                      <div key={member.user_id} className="flex items-center gap-3">
-                        <Avatar>
-                          <AvatarImage src="" alt={display} />
-                          <AvatarFallback className="bg-muted text-muted-foreground">
-                            {display.slice(0, 2).toUpperCase()}
-                          </AvatarFallback>
-                        </Avatar>
-                        <div>
-                          <p className="text-sm font-medium">{display}</p>
-                          <p className="text-xs text-muted-foreground">Team member</p>
-                        </div>
-                      </div>
-                    )
-                  })}
                 </div>
               </CardContent>
             </Card>
@@ -193,30 +172,21 @@ export function ProjectPage() {
                   <JoinRequestDialog
                     projectId={project.project_id}
                     projectTitle={project.title}
-                    projectOwner={ownerName}
+                    projectOwner={project.owner.name}
                   >
                     <Button type="button" className="w-full">
                       Request to Join
                     </Button>
                   </JoinRequestDialog>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="w-full"
-                    disabled={!ownerUserId}
-                    onClick={() => {
-                      if (ownerUserId) {
-                        openChatHub({
-                          project_id: project.project_id,
-                          project_title: project.title,
-                          peer_user_id: ownerUserId,
-                          peer_name: ownerName,
-                        })
-                      }
-                    }}
+                  <JoinRequestDialog
+                    projectId={project.project_id}
+                    projectTitle={project.title}
+                    projectOwner={project.owner.name}
                   >
-                    Message owner
-                  </Button>
+                    <Button type="button" variant="outline" className="w-full">
+                      Contact Owner
+                    </Button>
+                  </JoinRequestDialog>
                 </div>
               </CardContent>
             </Card>
@@ -228,13 +198,13 @@ export function ProjectPage() {
               <CardContent>
                 <div className="flex items-center gap-3">
                   <Avatar className="h-12 w-12">
-                    <AvatarImage src="" alt={ownerName} />
+                    <AvatarImage src={avatarUrl(project.owner.avatar_path)} alt={project.owner.name} />
                     <AvatarFallback className="bg-primary text-primary-foreground">
-                      {ownerName.slice(0, 2).toUpperCase()}
+                      {project.owner.name.slice(0, 2).toUpperCase()}
                     </AvatarFallback>
                   </Avatar>
                   <div>
-                    <p className="font-medium">{ownerName}</p>
+                    <p className="font-medium">{project.owner.name}</p>
                   </div>
                 </div>
               </CardContent>

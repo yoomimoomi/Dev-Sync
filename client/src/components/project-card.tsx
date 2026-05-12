@@ -2,13 +2,14 @@ import { Link } from "react-router-dom"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent } from "@/components/ui/card"
+import { avatarUrl } from "@/lib/api-config"
 
 export interface Project {
   project_id: string
-  owner?: {
-    user_id?: string
-    name?: string
-  } | null
+  owner: {
+    name: string
+    avatar_path?: string | null
+  }
   title: string
   description: string
   status: string
@@ -18,12 +19,6 @@ export interface Project {
   technologies: string[]
   created_at: string
   applicant_user_names: Array<string | null>
-  /** Users with Accepted join applications (from API). */
-  accepted_team_members?: Array<{
-    user_id: string
-    name?: string | null
-    email?: string | null
-  }>
   comments: Array<{
     user_id: string
     project_id: string
@@ -31,6 +26,7 @@ export interface Project {
     created_at: string | null
     user: {
       name: string
+      avatar_path?: string | null
     } | null
   }>
 }
@@ -59,7 +55,6 @@ function formatTimeAgo(input: string) {
 
 export function ProjectCard({ project }: ProjectCardProps) {
   const tags = [...project.roles, ...project.skills, ...project.technologies]
-  const ownerName = project.owner?.name?.trim() || 'Unknown'
 
   return (
     <Link to={`/project/${project.project_id}`} className="block">
@@ -68,13 +63,13 @@ export function ProjectCard({ project }: ProjectCardProps) {
           <div className="flex items-start justify-between gap-4">
             <div className="flex items-center gap-3">
               <Avatar className="h-10 w-10">
-                <AvatarImage src="" alt={ownerName} />
+                <AvatarImage src={avatarUrl(project.owner.avatar_path)} alt={project.owner.name} />
                 <AvatarFallback className="bg-muted text-muted-foreground">
-                  {ownerName.slice(0, 2).toUpperCase()}
+                  {project.owner.name.slice(0, 2).toUpperCase()}
                 </AvatarFallback>
               </Avatar>
               <div className="flex items-center gap-3 text-sm text-muted-foreground">
-                <span className="font-medium text-foreground">{ownerName}</span>
+                <span className="font-medium text-foreground">{project.owner.name}</span>
                 <span>{formatTimeAgo(project.created_at)}</span>
               </div>
             </div>

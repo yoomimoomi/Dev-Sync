@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import datetime
 from typing import Optional, TYPE_CHECKING
 
@@ -8,9 +6,9 @@ from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.ext.associationproxy import association_proxy, AssociationProxy
 from app.db.base import Base
-from app.models.account import Account
 
 if TYPE_CHECKING:
+    from app.models.account import Account
     from app.models.application import Application
     from app.models.comment import Comment
 class Project(Base):
@@ -40,23 +38,6 @@ class Project(Base):
     @property
     def applicant_user_names(self) -> list[Optional[str]]:
         return [a.user.name for a in self.applications]
-
-    @property
-    def accepted_team_members(self) -> list[Account]:
-        """Accounts with an Accepted application for this project (excludes owner)."""
-        members: list[Account] = []
-        seen: set[str] = set()
-        for app in self.applications:
-            if (app.status or "").strip().lower() != "accepted":
-                continue
-            if app.user is None:
-                continue
-            uid = (app.user.user_id or "").strip()
-            if not uid or uid in seen:
-                continue
-            seen.add(uid)
-            members.append(app.user)
-        return members
 
     @property
     def commenter_names(self) -> list[Optional[str]]:

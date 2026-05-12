@@ -11,10 +11,7 @@ if TYPE_CHECKING:
     from app.models.project import Project
     from app.models.application import Application
     from app.models.comment import Comment
-
-from app.models.message import Message
-
-
+    from app.models.message import Message
 class Account(Base):
     __tablename__ = 'accounts'
     __table_args__ = (
@@ -36,6 +33,8 @@ class Account(Base):
     interests: Mapped[Optional[list[str]]] = mapped_column(ARRAY(Text()))
     github: Mapped[Optional[str]] = mapped_column(Text())
     linkedin: Mapped[Optional[str]] = mapped_column(Text())
+    bio: Mapped[Optional[str]] = mapped_column(Text())
+    avatar_path: Mapped[Optional[str]] = mapped_column(Text())
 
     projects: Mapped[list['Project']] = relationship('Project', back_populates='owner')
     # joined_teams: Mapped[list['Team']] = relationship(
@@ -45,12 +44,7 @@ class Account(Base):
     # )
     applications: Mapped[list['Application']] = relationship('Application', back_populates='user')
     comments: Mapped[list['Comment']] = relationship('Comment', back_populates='user')
-    sent_messages: Mapped[list[Message]] = relationship(
-        'Message', foreign_keys=[Message.sender_id], back_populates='sender'
-    )
-    received_messages: Mapped[list[Message]] = relationship(
-        'Message', foreign_keys=[Message.receiver_id], back_populates='receiver'
-    )
+    messages: Mapped[list['Message']] = relationship('Message', back_populates='user')
 
 
 

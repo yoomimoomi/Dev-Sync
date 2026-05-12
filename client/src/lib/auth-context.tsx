@@ -1,13 +1,12 @@
 "use client"
 
 import { createContext, useContext, useState, useCallback, useEffect, type ReactNode } from "react"
-import { resetSupabaseRealtimeClient } from "@/lib/supabase-realtime"
 
 interface User {
   id: string
   name: string
   email: string
-  avatar?: string
+  avatar_path?: string | null
 }
 
 type AuthResult = { success: boolean; error?: string }
@@ -46,7 +45,7 @@ async function readErrorMessage(res: Response): Promise<string> {
 }
 
 type TokenResponse = { access_token: string; token_type: string }
-type AccountRead = { user_id: string; name: string; email: string }
+type AccountRead = { user_id: string; name: string; email: string; avatar_path?: string | null }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
@@ -57,7 +56,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     })
     if (!res.ok) return null
     const me = (await res.json()) as AccountRead
-    return { id: me.user_id, name: me.name, email: me.email }
+    return { id: me.user_id, name: me.name, email: me.email, avatar_path: me.avatar_path }
   }, [])
 
   useEffect(() => {
@@ -89,7 +88,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       const token = (await res.json()) as TokenResponse
       localStorage.setItem(TOKEN_STORAGE_KEY, token.access_token)
-      resetSupabaseRealtimeClient()
 
       const me = await fetchMeWithToken(token.access_token)
       if (!me) return { success: false, error: "Could not validate account" }
@@ -118,7 +116,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = useCallback(() => {
     localStorage.removeItem(TOKEN_STORAGE_KEY)
-    resetSupabaseRealtimeClient()
     setUser(null)
   }, [])
 
