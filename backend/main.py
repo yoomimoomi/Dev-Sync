@@ -51,6 +51,7 @@ from app.services.notifications import (
 ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "30"))
 SECRET_KEY = os.getenv("JWT_SECRET_KEY", "change-this-in-env")
 ALGORITHM = "HS256"
+FRONTEND_URL = os.getenv("FRONTEND_URL")
 
 # Supabase Dashboard → Settings → API → JWT Secret (read-only). Used only on the server to mint
 # short-lived Realtime tokens; must NOT match JWT_SECRET_KEY.

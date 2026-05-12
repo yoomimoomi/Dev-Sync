@@ -1,17 +1,17 @@
-We will be using uv to manage python dependencies
+We use `uv` to manage Python dependencies.
+
 # Setup
-Install [uv](https://docs.astral.sh/uv/getting-started/installation/) and navigate to the backend directory in the terminal. Run uv sync
+Install [uv](https://docs.astral.sh/uv/getting-started/installation/) and run:
+
 ```
 cd backend
 uv sync
 ```
-To add additional dependencies as necessary, use 
-```uv add 
+
+To add dependencies:
+
+```
 uv add [package 1] [package 2]
-```
-To make sure all packages are the same between collaborators, use
-```
-uv sync
 ```
 # Run
 
