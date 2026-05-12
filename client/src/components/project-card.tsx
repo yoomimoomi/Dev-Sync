@@ -1,4 +1,4 @@
-import { Link } from "react-router-dom"
+import { Link, useNavigate } from "react-router-dom"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent } from "@/components/ui/card"
@@ -6,6 +6,7 @@ import { avatarUrl } from "@/lib/api-config"
 
 export interface Project {
   project_id: string
+  user_id: string
   owner: {
     name: string
     avatar_path?: string | null
@@ -54,6 +55,7 @@ function formatTimeAgo(input: string) {
 }
 
 export function ProjectCard({ project }: ProjectCardProps) {
+  const navigate = useNavigate()
   const tags = [...project.roles, ...project.skills, ...project.technologies]
 
   return (
@@ -69,7 +71,17 @@ export function ProjectCard({ project }: ProjectCardProps) {
                 </AvatarFallback>
               </Avatar>
               <div className="flex items-center gap-3 text-sm text-muted-foreground">
-                <span className="font-medium text-foreground">{project.owner.name}</span>
+                <button
+                  type="button"
+                  className="font-medium text-foreground hover:text-primary hover:underline"
+                  onClick={(e) => {
+                    e.preventDefault()
+                    e.stopPropagation()
+                    navigate(`/users/${project.user_id}`)
+                  }}
+                >
+                  {project.owner.name}
+                </button>
                 <span>{formatTimeAgo(project.created_at)}</span>
               </div>
             </div>

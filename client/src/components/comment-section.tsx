@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import { Link } from "react-router-dom"
 import { MessageCircle, Reply, Send } from "lucide-react"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
@@ -60,7 +61,16 @@ function CommentItem({
         </Avatar>
         <div className="flex-1 space-y-1">
           <div className="flex items-center gap-2">
-            <span className="font-medium text-sm">{comment.author.name}</span>
+            {comment.author.user_id ? (
+              <Link
+                to={`/users/${comment.author.user_id}`}
+                className="font-medium text-sm hover:text-primary hover:underline"
+              >
+                {comment.author.name}
+              </Link>
+            ) : (
+              <span className="font-medium text-sm">{comment.author.name}</span>
+            )}
             <span className="text-xs text-muted-foreground">{comment.createdAt}</span>
           </div>
           <p className="text-sm text-foreground">{comment.content}</p>
@@ -167,7 +177,11 @@ export function CommentSection({ projectId, initialComments }: CommentSectionPro
       const comment: Comment = {
         id: `${savedComment.user_id}-${savedComment.project_id}`,
         projectId: savedComment.project_id,
-        author: { name: savedComment.user?.name ?? user.name, avatar_path: savedComment.user?.avatar_path ?? user.avatar_path },
+        author: {
+          user_id: savedComment.user_id,
+          name: savedComment.user?.name ?? user.name,
+          avatar_path: savedComment.user?.avatar_path ?? user.avatar_path,
+        },
         content: savedComment.content ?? "",
         createdAt: savedComment.created_at ?? "Just now",
       }
@@ -188,7 +202,7 @@ export function CommentSection({ projectId, initialComments }: CommentSectionPro
         const newReply: Comment = {
           id: `reply-${Date.now()}`,
           projectId,
-          author: { name: user.name, avatar_path: user.avatar_path },
+          author: { user_id: user.id, name: user.name, avatar_path: user.avatar_path },
           content,
           createdAt: "Just now",
         }

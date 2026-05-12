@@ -89,7 +89,11 @@ export function ProjectPage() {
   const projectComments: Comment[] = project.comments.map((comment) => ({
     id: `${comment.user_id}-${comment.project_id}`,
     projectId: comment.project_id,
-    author: { name: comment.user?.name ?? 'Unknown User', avatar_path: comment.user?.avatar_path },
+    author: {
+      user_id: comment.user_id,
+      name: comment.user?.name ?? 'Unknown User',
+      avatar_path: comment.user?.avatar_path,
+    },
     content: comment.content ?? '',
     createdAt: comment.created_at ?? '',
   }))
@@ -141,7 +145,9 @@ export function ProjectPage() {
                       </AvatarFallback>
                     </Avatar>
                     <div>
-                      <p className="text-sm font-medium">{project.owner.name}</p>
+                      <Link to={`/users/${project.user_id}`} className="text-sm font-medium hover:text-primary hover:underline">
+                        {project.owner.name}
+                      </Link>
                       <p className="text-xs text-muted-foreground">Project Lead</p>
                     </div>
                   </div>
@@ -204,7 +210,9 @@ export function ProjectPage() {
                     </AvatarFallback>
                   </Avatar>
                   <div>
-                    <p className="font-medium">{project.owner.name}</p>
+                    <Link to={`/users/${project.user_id}`} className="font-medium hover:text-primary hover:underline">
+                      {project.owner.name}
+                    </Link>
                   </div>
                 </div>
               </CardContent>

@@ -186,7 +186,13 @@ export function ManageProjectsPage() {
                             {project.title}
                           </Link>
                         </CardTitle>
-                        <p className="text-sm text-muted-foreground">Created on {project.created_at}</p>
+                        <p className="text-sm text-muted-foreground">
+                          by{" "}
+                          <Link to={`/users/${project.user_id}`} className="hover:text-primary hover:underline">
+                            {project.owner.name}
+                          </Link>{" "}
+                          · Created on {project.created_at}
+                        </p>
                       </div>
                     </div>
                     {mounted ? (
@@ -277,7 +283,9 @@ export function ManageProjectsPage() {
                         <AvatarFallback>{initials(req.user_name)}</AvatarFallback>
                       </Avatar>
                       <div>
-                        <p className="text-sm font-medium">{req.user_name}</p>
+                        <Link to={`/users/${req.user_id}`} className="text-sm font-medium hover:text-primary hover:underline">
+                          {req.user_name}
+                        </Link>
                         <p className="text-xs text-muted-foreground">
                           Wants to join &quot;{req.project_title}&quot;
                         </p>
