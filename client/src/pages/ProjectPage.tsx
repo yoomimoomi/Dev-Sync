@@ -10,6 +10,7 @@ import { CommentSection } from '@/components/comment-section'
 import { JoinRequestDialog } from '@/components/join-request-dialog'
 import { Button } from '@/components/ui/button'
 import type { Comment } from '@/lib/mock-data'
+import { avatarUrl } from '@/lib/api-config'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000'
 
@@ -88,7 +89,7 @@ export function ProjectPage() {
   const projectComments: Comment[] = project.comments.map((comment) => ({
     id: `${comment.user_id}-${comment.project_id}`,
     projectId: comment.project_id,
-    author: { name: comment.user?.name ?? 'Unknown User' },
+    author: { name: comment.user?.name ?? 'Unknown User', avatar_path: comment.user?.avatar_path },
     content: comment.content ?? '',
     createdAt: comment.created_at ?? '',
   }))
@@ -134,7 +135,7 @@ export function ProjectPage() {
                 <div className="flex flex-wrap gap-4">
                   <div className="flex items-center gap-3">
                     <Avatar>
-                      <AvatarImage src="" alt={project.owner.name} />
+                      <AvatarImage src={avatarUrl(project.owner.avatar_path)} alt={project.owner.name} />
                       <AvatarFallback className="bg-primary text-primary-foreground">
                         {project.owner.name.slice(0, 2).toUpperCase()}
                       </AvatarFallback>
@@ -197,7 +198,7 @@ export function ProjectPage() {
               <CardContent>
                 <div className="flex items-center gap-3">
                   <Avatar className="h-12 w-12">
-                    <AvatarImage src="" alt={project.owner.name} />
+                    <AvatarImage src={avatarUrl(project.owner.avatar_path)} alt={project.owner.name} />
                     <AvatarFallback className="bg-primary text-primary-foreground">
                       {project.owner.name.slice(0, 2).toUpperCase()}
                     </AvatarFallback>
