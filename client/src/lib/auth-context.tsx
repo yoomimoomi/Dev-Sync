@@ -46,7 +46,7 @@ async function readErrorMessage(res: Response): Promise<string> {
 }
 
 type TokenResponse = { access_token: string; token_type: string }
-type AccountRead = { user_id: string; name: string; email: string }
+type AccountRead = { user_id: string; name: string; email: string; avatar?: string | null }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
@@ -57,7 +57,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     })
     if (!res.ok) return null
     const me = (await res.json()) as AccountRead
-    return { id: me.user_id, name: me.name, email: me.email }
+    return { id: me.user_id, name: me.name, email: me.email, avatar: me.avatar ?? undefined }
   }, [])
 
   useEffect(() => {

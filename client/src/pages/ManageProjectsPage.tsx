@@ -21,10 +21,12 @@ import {
   openChatHub,
   TOKEN_STORAGE_KEY,
 } from '@/lib/api-config'
+import { formatTimeAgo } from '@/lib/datetime-display'
 
 type JoinRequest = {
   user_id: string
   user_name: string
+  user_avatar?: string | null
   project_id: string
   project_title: string
   status: string
@@ -167,13 +169,14 @@ export function ManageProjectsPage() {
           <div className="space-y-4">
             {projects.map((project) => {
               const ownerName = project.owner?.name?.trim() || 'Unknown'
+              const ownerAvatar = project.owner?.avatar || undefined
               return (
               <Card key={project.project_id} className="transition-all hover:shadow-md">
                 <CardHeader className="pb-3">
                   <div className="flex items-start justify-between">
                     <div className="flex items-center gap-4">
                       <Avatar className="h-10 w-10">
-                        <AvatarImage src="" alt={ownerName} />
+                        <AvatarImage src={ownerAvatar} alt={ownerName} />
                         <AvatarFallback className="bg-primary text-primary-foreground">
                           {ownerName.slice(0, 2).toUpperCase()}
                         </AvatarFallback>
@@ -187,7 +190,7 @@ export function ManageProjectsPage() {
                             {project.title}
                           </Link>
                         </CardTitle>
-                        <p className="text-sm text-muted-foreground">Created on {project.created_at}</p>
+                        <p className="text-sm text-muted-foreground">Created {formatTimeAgo(project.created_at)}</p>
                       </div>
                     </div>
                     {mounted ? (
@@ -274,6 +277,7 @@ export function ManageProjectsPage() {
                   >
                     <div className="flex items-center gap-3">
                       <Avatar>
+                        <AvatarImage src={req.user_avatar || undefined} alt={req.user_name} />
                         <AvatarFallback>{initials(req.user_name)}</AvatarFallback>
                       </Avatar>
                       <div>
@@ -294,6 +298,7 @@ export function ManageProjectsPage() {
                             project_title: req.project_title,
                             peer_user_id: req.user_id,
                             peer_name: req.user_name,
+                            peer_avatar: req.user_avatar ?? null,
                           })
                         }
                       >

@@ -25,7 +25,7 @@ from app.models.account import Account
 from app.models.application import Application
 from app.models.comment import Comment
 from app.routes import router
-from app.schemas.account import AccountCreate, AccountRead
+from app.schemas.account import AccountCreate, AccountRead, AccountUpdate
 from app.schemas.application import ApplicationCreate, ApplicationRead, ProjectOwnerView
 from app.schemas.comment import CommentCreate, CommentRead
 from app.schemas.projects import ProjectCreate, ProjectRead
@@ -291,6 +291,25 @@ async def get_me(current_user: Annotated[Account, Depends(get_current_user)]):
     return current_user
 
 
+@app.patch("/user/me", response_model=AccountRead)
+async def update_me(
+    update: AccountUpdate,
+    current_user: Annotated[Account, Depends(get_current_user)],
+    db: Session = Depends(get_db),
+):
+    # exclude_unset so missing keys leave the existing value alone (true partial update).
+    data = update.model_dump(exclude_unset=True)
+    for field, value in data.items():
+        setattr(current_user, field, value)
+    try:
+        db.commit()
+        db.refresh(current_user)
+    except Exception:
+        db.rollback()
+        raise HTTPException(status_code=500, detail="Could not update profile")
+    return current_user
+
+
 @app.get("/realtime/token", response_model=RealtimeTokenOut)
 async def supabase_realtime_token(current_user: Annotated[Account, Depends(get_current_user)]):
     """Return a short-lived JWT that Supabase Realtime accepts for `postgres_changes` RLS.
@@ -354,6 +373,7 @@ async def create_user(user_in: AccountCreate, db: Session = Depends(get_db)):
         roles=user_in.roles,
         technologies=user_in.technologies,
         skills=user_in.skills,
+        avatar=user_in.avatar,
         password_hash=hash_pwd(user_in.password),
     )
     db.add(new_user)
@@ -471,6 +491,7 @@ async def get_applications_to_my_projects(
         db.query(
             Application.user_id,
             Account.name.label("user_name"),
+            Account.avatar.label("user_avatar"),
             Application.project_id,
             Project.title.label("project_title"),
             Application.status,
@@ -488,6 +509,7 @@ async def get_applications_to_my_projects(
         {
             "user_id": r.user_id,
             "user_name": r.user_name,
+            "user_avatar": r.user_avatar,
             "project_id": r.project_id,
             "project_title": r.project_title,
             "status": r.status,
@@ -706,34 +728,35 @@ async def create_comment(
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
 
-    existing_comment = (
-        db.query(Comment)
-        .filter(
-            Comment.user_id == current_user.user_id,
-            Comment.project_id == comment_in.project_id,
+    # If this is a reply, ensure the parent exists and lives on the same project
+    # (prevents cross-project reply chains).
+    if comment_in.reply_to:
+        parent = (
+            db.query(Comment)
+            .filter(Comment.comment_id == comment_in.reply_to)
+            .first()
         )
-        .first()
-    )
-    if existing_comment:
-        raise HTTPException(
-            status_code=400,
-            detail="You have already posted a comment on this project",
-        )
+        if not parent:
+            raise HTTPException(status_code=404, detail="Parent comment not found")
+        if (parent.project_id or "").strip() != (comment_in.project_id or "").strip():
+            raise HTTPException(
+                status_code=400,
+                detail="Cannot reply to a comment from a different project",
+            )
 
     new_comment = Comment(
+        comment_id=f"C{randrange(100000000, 999999999)}",
         user_id=current_user.user_id,
         project_id=comment_in.project_id,
         content=comment_in.content.strip(),
+        reply_to=comment_in.reply_to,
     )
     db.add(new_comment)
     db.commit()
     db.refresh(new_comment)
     return (
         db.query(Comment)
-        .filter(
-            Comment.user_id == new_comment.user_id,
-            Comment.project_id == new_comment.project_id,
-        )
+        .filter(Comment.comment_id == new_comment.comment_id)
         .options(selectinload(Comment.user))
         .first()
     )
@@ -810,6 +833,7 @@ async def get_my_conversations(
                 project_title=project.title or "",
                 peer_user_id=peer_id,
                 peer_name=peer.name or "",
+                peer_avatar=peer.avatar,
                 last_message=msg.content,
                 last_message_at=msg.created_at,
             )

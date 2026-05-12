@@ -27,15 +27,17 @@ class Account(Base):
     name: Mapped[Optional[str]] = mapped_column(String(50))#Should be changed to non-null
     email: Mapped[Optional[str]] = mapped_column(String(50))
     grade: Mapped[Optional[str]] = mapped_column(String(9))
-    roles: Mapped[Optional[list[str]]] = mapped_column(ARRAY(String(length=20)))
-    skills: Mapped[Optional[list[str]]] = mapped_column(ARRAY(String(length=20)))
-    technologies: Mapped[Optional[list[str]]] = mapped_column(ARRAY(String(length=20)))
+    roles: Mapped[Optional[list[str]]] = mapped_column(ARRAY(Text()))
+    skills: Mapped[Optional[list[str]]] = mapped_column(ARRAY(Text()))
+    technologies: Mapped[Optional[list[str]]] = mapped_column(ARRAY(Text()))
     major: Mapped[Optional[str]] = mapped_column(Text())
     school: Mapped[Optional[str]] = mapped_column(Text())
     date: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), server_default=text('CURRENT_TIMESTAMP'))
     interests: Mapped[Optional[list[str]]] = mapped_column(ARRAY(Text()))
     github: Mapped[Optional[str]] = mapped_column(Text())
     linkedin: Mapped[Optional[str]] = mapped_column(Text())
+    avatar: Mapped[Optional[str]] = mapped_column("avatar_path", Text())
+    bio: Mapped[Optional[str]] = mapped_column("bio", Text())
 
     projects: Mapped[list['Project']] = relationship('Project', back_populates='owner')
     # joined_teams: Mapped[list['Team']] = relationship(

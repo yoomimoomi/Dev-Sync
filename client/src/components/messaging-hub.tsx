@@ -36,6 +36,7 @@ type ConversationRow = {
   project_title: string
   peer_user_id: string
   peer_name: string
+  peer_avatar?: string | null
   last_message: string | null
   last_message_at: string | null
 }
@@ -210,6 +211,7 @@ export function MessagingHub() {
         project_title: payload.project_title,
         peer_user_id: payload.peer_user_id,
         peer_name: payload.peer_name,
+        peer_avatar: payload.peer_avatar ?? null,
         last_message: null,
         last_message_at: null,
       })
@@ -414,9 +416,17 @@ export function MessagingHub() {
                     className="flex w-full items-center gap-3 border-b px-4 py-3 text-left last:border-b-0 transition-colors hover:bg-muted/40"
                   >
                     {/* Avatar */}
-                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-bold text-primary">
-                      {initials(conv.peer_name)}
-                    </div>
+                    {conv.peer_avatar ? (
+                      <img
+                        src={conv.peer_avatar}
+                        alt={conv.peer_name}
+                        className="h-10 w-10 shrink-0 rounded-full object-cover"
+                      />
+                    ) : (
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-bold text-primary">
+                        {initials(conv.peer_name)}
+                      </div>
+                    )}
 
                     {/* Content */}
                     <div className="min-w-0 flex-1">
@@ -451,9 +461,17 @@ export function MessagingHub() {
                 >
                   <ArrowLeft className="h-4 w-4" />
                 </button>
-                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-bold text-primary">
-                  {initials(activeConv.peer_name)}
-                </div>
+                {activeConv.peer_avatar ? (
+                  <img
+                    src={activeConv.peer_avatar}
+                    alt={activeConv.peer_name}
+                    className="h-8 w-8 shrink-0 rounded-full object-cover"
+                  />
+                ) : (
+                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-bold text-primary">
+                    {initials(activeConv.peer_name)}
+                  </div>
+                )}
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-semibold leading-tight">{activeConv.peer_name}</p>
                   <p className="truncate text-[11px] leading-tight text-muted-foreground">{activeConv.project_title}</p>

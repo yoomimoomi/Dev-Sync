@@ -11,26 +11,9 @@ import { JoinRequestDialog } from '@/components/join-request-dialog'
 import { Button } from '@/components/ui/button'
 import { openChatHub } from '@/lib/api-config'
 import type { Comment } from '@/lib/mock-data'
+import { formatTimeAgo } from '@/lib/datetime-display'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000'
-
-function formatTimeAgo(input: string) {
-  const date = new Date(input)
-  if (Number.isNaN(date.getTime())) return input
-
-  const diffMs = Math.max(0, Date.now() - date.getTime())
-
-  const minute = 60 * 1000
-  const hour = 60 * minute
-  const day = 24 * hour
-  const week = 7 * day
-
-  if (diffMs < minute) return 'just now'
-  if (diffMs < hour) return `${Math.floor(diffMs / minute)}m`
-  if (diffMs < day) return `${Math.floor(diffMs / hour)}h`
-  if (diffMs < week) return `${Math.floor(diffMs / day)}d`
-  return `${Math.floor(diffMs / week)}w`
-}
 
 export function ProjectPage() {
   const { id = '' } = useParams()
@@ -86,15 +69,37 @@ export function ProjectPage() {
     )
   }
 
-  const projectComments: Comment[] = project.comments.map((comment) => ({
-    id: `${comment.user_id}-${comment.project_id}`,
-    projectId: comment.project_id,
-    author: { name: comment.user?.name ?? 'Unknown User' },
-    content: comment.content ?? '',
-    createdAt: comment.created_at ?? '',
-  }))
+  // Flatten the API rows into the UI Comment shape, then nest replies under
+  // their parents using `reply_to`. Replies that point at an unknown parent
+  // fall back to top-level so they're never silently dropped.
+  const flatById = new Map<string, Comment>()
+  for (const c of project.comments) {
+    flatById.set(c.comment_id, {
+      id: c.comment_id,
+      projectId: c.project_id,
+      author: {
+        name: c.user?.name ?? 'Unknown User',
+        avatar: c.user?.avatar ?? undefined,
+      },
+      content: c.content ?? '',
+      createdAt: c.created_at ?? '',
+      replies: [],
+    })
+  }
+  const projectComments: Comment[] = []
+  for (const c of project.comments) {
+    const node = flatById.get(c.comment_id)
+    if (!node) continue
+    const parent = c.reply_to ? flatById.get(c.reply_to) : undefined
+    if (parent) {
+      parent.replies = [...(parent.replies ?? []), node]
+    } else {
+      projectComments.push(node)
+    }
+  }
 
   const ownerName = project.owner?.name?.trim() || 'Unknown'
+  const ownerAvatar = project.owner?.avatar || undefined
   const ownerUserId = project.owner?.user_id
   const acceptedMembers = project.accepted_team_members ?? []
 
@@ -139,7 +144,7 @@ export function ProjectPage() {
                 <div className="flex flex-wrap gap-4">
                   <div className="flex items-center gap-3">
                     <Avatar>
-                      <AvatarImage src="" alt={ownerName} />
+                      <AvatarImage src={ownerAvatar} alt={ownerName} />
                       <AvatarFallback className="bg-primary text-primary-foreground">
                         {ownerName.slice(0, 2).toUpperCase()}
                       </AvatarFallback>
@@ -151,10 +156,11 @@ export function ProjectPage() {
                   </div>
                   {acceptedMembers.map((member) => {
                     const display = member.name?.trim() || member.email?.trim() || 'Member'
+                    const memberAvatar = member.avatar || undefined
                     return (
                       <div key={member.user_id} className="flex items-center gap-3">
                         <Avatar>
-                          <AvatarImage src="" alt={display} />
+                          <AvatarImage src={memberAvatar} alt={display} />
                           <AvatarFallback className="bg-muted text-muted-foreground">
                             {display.slice(0, 2).toUpperCase()}
                           </AvatarFallback>
@@ -211,6 +217,7 @@ export function ProjectPage() {
                           project_title: project.title,
                           peer_user_id: ownerUserId,
                           peer_name: ownerName,
+                          peer_avatar: ownerAvatar ?? null,
                         })
                       }
                     }}
@@ -228,7 +235,7 @@ export function ProjectPage() {
               <CardContent>
                 <div className="flex items-center gap-3">
                   <Avatar className="h-12 w-12">
-                    <AvatarImage src="" alt={ownerName} />
+                    <AvatarImage src={ownerAvatar} alt={ownerName} />
                     <AvatarFallback className="bg-primary text-primary-foreground">
                       {ownerName.slice(0, 2).toUpperCase()}
                     </AvatarFallback>

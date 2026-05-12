@@ -27,6 +27,7 @@ class ConversationRead(BaseModel):
     project_title: str
     peer_user_id: str
     peer_name: str
+    peer_avatar: Optional[str] = None
     last_message: Optional[str] = None
     last_message_at: Optional[datetime] = None
 

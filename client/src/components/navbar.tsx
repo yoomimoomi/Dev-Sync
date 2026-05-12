@@ -162,9 +162,21 @@ export function Navbar() {
                     <Button
                       variant="ghost"
                       size="icon"
-                      className="rounded-full border-2 border-primary text-primary hover:bg-primary/10"
+                      className="rounded-full border-2 border-primary p-0 overflow-hidden text-primary hover:bg-primary/10"
                     >
-                      <User className="h-5 w-5" />
+                      {user?.avatar ? (
+                        <img
+                          src={user.avatar}
+                          alt={user?.name ?? "Profile"}
+                          className="h-full w-full object-cover"
+                        />
+                      ) : user?.name ? (
+                        <span className="text-sm font-semibold">
+                          {user.name.charAt(0).toUpperCase()}
+                        </span>
+                      ) : (
+                        <User className="h-5 w-5" />
+                      )}
                       <span className="sr-only">Profile</span>
                     </Button>
                   </DropdownMenuTrigger>

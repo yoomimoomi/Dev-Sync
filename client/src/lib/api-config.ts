@@ -31,6 +31,7 @@ export type OpenChatPayload = {
   project_title: string
   peer_user_id: string
   peer_name: string
+  peer_avatar?: string | null
 }
 
 export function openChatHub(payload: OpenChatPayload): void {
