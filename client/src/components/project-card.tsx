@@ -5,9 +5,10 @@ import { Card, CardContent } from "@/components/ui/card"
 
 export interface Project {
   project_id: string
-  owner: {
-    name: string
-  }
+  owner?: {
+    user_id?: string
+    name?: string
+  } | null
   title: string
   description: string
   status: string
@@ -17,6 +18,12 @@ export interface Project {
   technologies: string[]
   created_at: string
   applicant_user_names: Array<string | null>
+  /** Users with Accepted join applications (from API). */
+  accepted_team_members?: Array<{
+    user_id: string
+    name?: string | null
+    email?: string | null
+  }>
   comments: Array<{
     user_id: string
     project_id: string
@@ -32,24 +39,43 @@ interface ProjectCardProps {
   project: Project
 }
 
+function formatTimeAgo(input: string) {
+  const date = new Date(input)
+  if (Number.isNaN(date.getTime())) return input
+
+  const diffMs = Math.max(0, Date.now() - date.getTime())
+
+  const minute = 60 * 1000
+  const hour = 60 * minute
+  const day = 24 * hour
+  const week = 7 * day
+
+  if (diffMs < minute) return "just now"
+  if (diffMs < hour) return `${Math.floor(diffMs / minute)}m`
+  if (diffMs < day) return `${Math.floor(diffMs / hour)}h`
+  if (diffMs < week) return `${Math.floor(diffMs / day)}d`
+  return `${Math.floor(diffMs / week)}w`
+}
+
 export function ProjectCard({ project }: ProjectCardProps) {
   const tags = [...project.roles, ...project.skills, ...project.technologies]
+  const ownerName = project.owner?.name?.trim() || 'Unknown'
 
   return (
-    <Link to={`/project/${project.project_id}`}>
+    <Link to={`/project/${project.project_id}`} className="block">
       <Card className="transition-all hover:shadow-lg hover:border-primary/50 cursor-pointer">
         <CardContent className="p-6">
           <div className="flex items-start justify-between gap-4">
             <div className="flex items-center gap-3">
               <Avatar className="h-10 w-10">
-                <AvatarImage src="" alt={project.owner.name} />
+                <AvatarImage src="" alt={ownerName} />
                 <AvatarFallback className="bg-muted text-muted-foreground">
-                  {project.owner.name.slice(0, 2).toUpperCase()}
+                  {ownerName.slice(0, 2).toUpperCase()}
                 </AvatarFallback>
               </Avatar>
               <div className="flex items-center gap-3 text-sm text-muted-foreground">
-                <span className="font-medium text-foreground">{project.owner.name}</span>
-                <span>{project.created_at}</span>
+                <span className="font-medium text-foreground">{ownerName}</span>
+                <span>{formatTimeAgo(project.created_at)}</span>
               </div>
             </div>
             <div className="flex flex-wrap justify-end gap-1.5">

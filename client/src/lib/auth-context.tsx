@@ -1,6 +1,7 @@
 "use client"
 
 import { createContext, useContext, useState, useCallback, useEffect, type ReactNode } from "react"
+import { resetSupabaseRealtimeClient } from "@/lib/supabase-realtime"
 
 interface User {
   id: string
@@ -88,6 +89,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       const token = (await res.json()) as TokenResponse
       localStorage.setItem(TOKEN_STORAGE_KEY, token.access_token)
+      resetSupabaseRealtimeClient()
 
       const me = await fetchMeWithToken(token.access_token)
       if (!me) return { success: false, error: "Could not validate account" }
@@ -116,6 +118,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = useCallback(() => {
     localStorage.removeItem(TOKEN_STORAGE_KEY)
+    resetSupabaseRealtimeClient()
     setUser(null)
   }, [])
 

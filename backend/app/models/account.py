@@ -11,7 +11,10 @@ if TYPE_CHECKING:
     from app.models.project import Project
     from app.models.application import Application
     from app.models.comment import Comment
-    from app.models.message import Message
+
+from app.models.message import Message
+
+
 class Account(Base):
     __tablename__ = 'accounts'
     __table_args__ = (
@@ -42,7 +45,12 @@ class Account(Base):
     # )
     applications: Mapped[list['Application']] = relationship('Application', back_populates='user')
     comments: Mapped[list['Comment']] = relationship('Comment', back_populates='user')
-    messages: Mapped[list['Message']] = relationship('Message', back_populates='user')
+    sent_messages: Mapped[list[Message]] = relationship(
+        'Message', foreign_keys=[Message.sender_id], back_populates='sender'
+    )
+    received_messages: Mapped[list[Message]] = relationship(
+        'Message', foreign_keys=[Message.receiver_id], back_populates='receiver'
+    )
 
 
 

@@ -31,6 +31,7 @@ class ProjectBase(BaseModel):
     roles: list[str] = []
     skills: list[str] = []
     technologies: list[str] = []
+    is_deleted: Optional[bool] = None
 
     @field_validator("roles", "skills", "technologies", mode="before")
     @classmethod
@@ -43,5 +44,6 @@ class ProjectBase(BaseModel):
 class ProjectRead(ProjectBase):
     owner: Optional[AccountRead] = None
     applicant_user_names: list[Optional[str]] = []
+    accepted_team_members: list[AccountRead] = []
     commenter_names: list[Optional[str]] = []
     comments: list[CommentRead] = []

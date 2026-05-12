@@ -1,6 +1,7 @@
-import { useState, useEffect } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Plus, Settings, Trash2, Eye, Users } from 'lucide-react'
+import { MessageSquare, Plus, Settings, Trash2, Eye, Users } from 'lucide-react'
+import { AuthGuard } from '@/components/auth-guard'
 import { Navbar } from '@/components/navbar'
 import { type Project } from '@/components/project-card'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
@@ -14,6 +15,12 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import {
+  API_BASE_URL,
+  APPLICATION_SUBMITTED_EVENT,
+  openChatHub,
+  TOKEN_STORAGE_KEY,
+} from '@/lib/api-config'
 
 type JoinRequest = {
   user_id: string
@@ -23,9 +30,6 @@ type JoinRequest = {
   status: string
   created_at: string
 }
-
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000'
-const TOKEN_STORAGE_KEY = 'devsync_access_token'
 
 function initials(name: string) {
   const parts = name.trim().split(/\s+/).filter(Boolean)
@@ -38,47 +42,102 @@ export function ManageProjectsPage() {
   const [mounted, setMounted] = useState(false)
   const [projects, setProjects] = useState<Project[]>([])
   const [joinRequests, setJoinRequests] = useState<JoinRequest[]>([])
+  const [requestActionKey, setRequestActionKey] = useState<string | null>(null)
 
   useEffect(() => {
     setMounted(true)
   }, [])
 
-  useEffect(() => {
-    const fetchProjects = async () => {
-      try {
-        const token = localStorage.getItem(TOKEN_STORAGE_KEY)
-        const response = await fetch(`${API_BASE_URL}/projects/me`, {
-          headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-        })
-        if (!response.ok) throw new Error('Failed to fetch projects')
-        const data: Project[] = await response.json()
-        setProjects(data)
-      } catch (error) {
-        console.error('Error fetching projects:', error)
-      }
+  const loadDashboard = useCallback(async () => {
+    const token = localStorage.getItem(TOKEN_STORAGE_KEY)
+    if (!token) {
+      setProjects([])
+      setJoinRequests([])
+      return
     }
-    fetchProjects()
+
+    try {
+      const headers = { Authorization: `Bearer ${token}` }
+      const [projRes, appRes] = await Promise.all([
+        fetch(`${API_BASE_URL}/projects/me`, { headers }),
+        fetch(`${API_BASE_URL}/applications/my-projects`, { headers }),
+      ])
+
+      if (projRes.ok) {
+        setProjects((await projRes.json()) as Project[])
+      } else {
+        setProjects([])
+      }
+
+      if (appRes.ok) {
+        setJoinRequests((await appRes.json()) as JoinRequest[])
+      } else {
+        setJoinRequests([])
+      }
+    } catch (error) {
+      console.error('Error loading manage projects:', error)
+    }
   }, [])
 
   useEffect(() => {
-    const fetchJoinRequests = async () => {
-      try {
-        const token = localStorage.getItem(TOKEN_STORAGE_KEY)
-        if (!token) return
-        const response = await fetch(`${API_BASE_URL}/applications/my-projects`, {
-          headers: { Authorization: `Bearer ${token}` },
-        })
-        if (!response.ok) throw new Error('Failed to fetch join requests')
-        const data: JoinRequest[] = await response.json()
-        setJoinRequests(data)
-      } catch (error) {
-        console.error('Error fetching join requests:', error)
-      }
+    void loadDashboard()
+  }, [loadDashboard])
+
+  useEffect(() => {
+    const onSubmitted = () => {
+      void loadDashboard()
     }
-    fetchJoinRequests()
-  }, [])
+    window.addEventListener(APPLICATION_SUBMITTED_EVENT, onSubmitted)
+    return () =>
+      window.removeEventListener(APPLICATION_SUBMITTED_EVENT, onSubmitted)
+  }, [loadDashboard])
+
+  const handleAccept = async (req: JoinRequest) => {
+    const token = localStorage.getItem(TOKEN_STORAGE_KEY)
+    if (!token) return
+    const key = `${req.user_id}-${req.project_id}-accept`
+    setRequestActionKey(key)
+    try {
+      const res = await fetch(
+        `${API_BASE_URL}/applications/${req.project_id}/${req.user_id}/accept`,
+        {
+          method: 'PATCH',
+          headers: { Authorization: `Bearer ${token}` },
+        },
+      )
+      if (!res.ok) throw new Error('Failed to accept request')
+      void loadDashboard()
+    } catch (error) {
+      console.error('Error accepting request:', error)
+    } finally {
+      setRequestActionKey(null)
+    }
+  }
+
+  const handleDecline = async (req: JoinRequest) => {
+    const token = localStorage.getItem(TOKEN_STORAGE_KEY)
+    if (!token) return
+    const key = `${req.user_id}-${req.project_id}-decline`
+    setRequestActionKey(key)
+    try {
+      const res = await fetch(
+        `${API_BASE_URL}/applications/${req.project_id}/${req.user_id}/decline`,
+        {
+          method: 'PATCH',
+          headers: { Authorization: `Bearer ${token}` },
+        },
+      )
+      if (!res.ok) throw new Error('Failed to decline request')
+      void loadDashboard()
+    } catch (error) {
+      console.error('Error declining request:', error)
+    } finally {
+      setRequestActionKey(null)
+    }
+  }
 
   return (
+    <AuthGuard>
     <div className="min-h-screen bg-background">
       <Navbar />
       <main className="container mx-auto px-4 py-8">
@@ -106,15 +165,17 @@ export function ManageProjectsPage() {
           </Card>
         ) : (
           <div className="space-y-4">
-            {projects.map((project) => (
+            {projects.map((project) => {
+              const ownerName = project.owner?.name?.trim() || 'Unknown'
+              return (
               <Card key={project.project_id} className="transition-all hover:shadow-md">
                 <CardHeader className="pb-3">
                   <div className="flex items-start justify-between">
                     <div className="flex items-center gap-4">
                       <Avatar className="h-10 w-10">
-                        <AvatarImage src="" alt={project.owner.name} />
+                        <AvatarImage src="" alt={ownerName} />
                         <AvatarFallback className="bg-primary text-primary-foreground">
-                          {project.owner.name.slice(0, 2).toUpperCase()}
+                          {ownerName.slice(0, 2).toUpperCase()}
                         </AvatarFallback>
                       </Avatar>
                       <div>
@@ -191,7 +252,7 @@ export function ManageProjectsPage() {
                   </div>
                 </CardContent>
               </Card>
-            ))}
+            )})}
           </div>
         )}
 
@@ -222,11 +283,36 @@ export function ManageProjectsPage() {
                         </p>
                       </div>
                     </div>
-                    <div className="flex gap-2">
-                      <Button size="sm" disabled>
+                    <div className="flex flex-wrap justify-end gap-2">
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        type="button"
+                        onClick={() =>
+                          openChatHub({
+                            project_id: req.project_id,
+                            project_title: req.project_title,
+                            peer_user_id: req.user_id,
+                            peer_name: req.user_name,
+                          })
+                        }
+                      >
+                        <MessageSquare className="mr-2 h-4 w-4" />
+                        Message
+                      </Button>
+                      <Button
+                        size="sm"
+                        disabled={requestActionKey !== null}
+                        onClick={() => void handleAccept(req)}
+                      >
                         Accept
                       </Button>
-                      <Button size="sm" variant="outline" disabled>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={requestActionKey !== null}
+                        onClick={() => void handleDecline(req)}
+                      >
                         Decline
                       </Button>
                     </div>
@@ -238,5 +324,6 @@ export function ManageProjectsPage() {
         </Card>
       </main>
     </div>
+    </AuthGuard>
   )
 }
