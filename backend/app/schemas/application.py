@@ -30,7 +30,6 @@ class ApplicantView(BaseModel):
 class ProjectOwnerView(BaseModel):
     user_id: str = Field(..., max_length=10)
     user_name: str = Field(..., max_length=50)
-    user_avatar: str | None = None
     project_id: str = Field(..., max_length=10)
     project_title: str = Field(..., max_length=50)
     status: str = Field(..., max_length=12)
