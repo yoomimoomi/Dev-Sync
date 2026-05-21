@@ -69,7 +69,7 @@ def _cors_allow_origins() -> list[str]:
     defaults = [
         "http://localhost:5173",
         "http://127.0.0.1:5173",
-        "https://dev-syncf.vercel.app",
+        "https://dev-sync-55mh.onrender.com",
     ]
     raw = os.getenv("CORS_ORIGINS", "").strip()
     if not raw:
