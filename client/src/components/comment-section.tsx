@@ -1,7 +1,6 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { Link } from "react-router-dom"
 import { MessageCircle, Reply, Send } from "lucide-react"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
@@ -63,18 +62,8 @@ function CommentItem({
         </Avatar>
         <div className="flex-1 space-y-1">
           <div className="flex items-center gap-2">
-            {comment.author.user_id ? (
-              <Link
-                to={`/users/${comment.author.user_id}`}
-                className="font-medium text-sm hover:text-primary hover:underline"
-              >
-                {comment.author.name}
-              </Link>
-            ) : (
-              <span className="font-medium text-sm">{comment.author.name}</span>
-            )}
-              <span className="text-xs text-muted-foreground">{formatTimeAgo(comment.createdAt)}</span>
             <span className="font-medium text-sm">{comment.author.name}</span>
+            <span className="text-xs text-muted-foreground">{formatTimeAgo(comment.createdAt)}</span>
           </div>
           <p className="text-sm text-foreground">{comment.content}</p>
           {isAuthenticated && (
@@ -181,7 +170,6 @@ export function CommentSection({ projectId, initialComments }: CommentSectionPro
         id: savedComment.comment_id,
         projectId: savedComment.project_id,
         author: {
-          user_id: savedComment.user_id,
           name: savedComment.user?.name ?? user.name,
           avatar: savedComment.user?.avatar ?? user.avatar ?? undefined,
         },
