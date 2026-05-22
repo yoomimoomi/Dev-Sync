@@ -139,6 +139,23 @@ class PasswordVerifyRequest(BaseModel):
     hashed_password: str
 
 
+class PublicProfileStats(BaseModel):
+    created_projects: int
+    joined_projects: int
+    total_projects: int
+
+
+class PublicProfileResponse(BaseModel):
+    user: AccountRead
+    stats: PublicProfileStats
+    created_projects: list[ProjectRead]
+    joined_projects: list[ProjectRead]
+
+
+# _AVATAR_MAX_BYTES = 5 * 1024 * 1024
+# _AVATAR_ALLOWED_TYPES = frozenset({"image/jpeg", "image/png", "image/webp", "image/gif"})
+
+
 async def _ws_send_json_safe(ws: WebSocket, payload: dict) -> None:
     """Send JSON only while Starlette considers the socket open; avoids uvicorn RuntimeError on dead ASGI links."""
     if ws.application_state != WebSocketState.CONNECTED:
@@ -367,6 +384,53 @@ async def get_user_by_id(user_id: str, db: Session = Depends(get_db)):
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     return user
+
+
+@app.get("/users/{user_id}/public-profile", response_model=PublicProfileResponse)
+async def get_public_profile(user_id: str, db: Session = Depends(get_db)):
+    user = db.query(Account).filter(Account.user_id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    created_projects = (
+        db.query(Project)
+        .filter(Project.user_id == user_id)
+        .filter(Project.is_deleted == False)
+        .options(
+            selectinload(Project.owner),
+            selectinload(Project.applications).selectinload(Application.user),
+            selectinload(Project.comments).selectinload(Comment.user),
+        )
+        .order_by(Project.created_at.desc())
+        .all()
+    )
+
+    joined_projects = (
+        db.query(Project)
+        .join(Application, Application.project_id == Project.project_id)
+        .filter(Application.user_id == user_id)
+        .filter(Application.status == "Accepted")
+        .filter(Project.is_deleted == False)
+        .filter(Project.user_id != user_id)
+        .options(
+            selectinload(Project.owner),
+            selectinload(Project.applications).selectinload(Application.user),
+            selectinload(Project.comments).selectinload(Comment.user),
+        )
+        .order_by(Project.created_at.desc())
+        .all()
+    )
+
+    return {
+        "user": user,
+        "stats": {
+            "created_projects": len(created_projects),
+            "joined_projects": len(joined_projects),
+            "total_projects": len(created_projects) + len(joined_projects),
+        },
+        "created_projects": created_projects,
+        "joined_projects": joined_projects,
+    }
 
 
 @app.post("/users", response_model=AccountRead)

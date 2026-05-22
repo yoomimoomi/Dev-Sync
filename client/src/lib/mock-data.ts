@@ -2,6 +2,7 @@ export interface Comment {
   id: string
   projectId: string
   author: {
+    user_id?: string
     name: string
     avatar?: string
   }

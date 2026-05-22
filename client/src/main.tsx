@@ -18,6 +18,7 @@ import { HomePage } from './pages/HomePage'
 import { ManageProjectsPage } from './pages/ManageProjectsPage'
 import { ProfilePage } from './pages/ProfilePage'
 import { ProjectPage } from './pages/ProjectPage'
+import { UserProfilePage } from './pages/UserProfilePage'
 
 function RootLayout() {
   return (
@@ -29,17 +30,13 @@ function RootLayout() {
 }
 
 const router = createBrowserRouter([
-  {
-    element: <RootLayout />,
-    children: [
-      { path: '/', element: <HomePage /> },
-      { path: '/create-project', element: <CreateProjectPage /> },
-      { path: '/manage-projects', element: <ManageProjectsPage /> },
-      { path: '/profile', element: <ProfilePage /> },
-      { path: '/project/:id', element: <ProjectPage /> },
-      { path: '*', element: <Navigate to="/" replace /> },
-    ],
-  },
+  { path: '/', element: <HomePage /> },
+  { path: '/create-project', element: <CreateProjectPage /> },
+  { path: '/manage-projects', element: <ManageProjectsPage /> },
+  { path: '/profile', element: <ProfilePage /> },
+  { path: '/users/:userId', element: <UserProfilePage /> },
+  { path: '/project/:id', element: <ProjectPage /> },
+  { path: '*', element: <Navigate to="/" replace /> },
 ])
 
 createRoot(document.getElementById('root')!).render(
