@@ -26,7 +26,7 @@ from app.models.application import Application
 from app.models.comment import Comment
 from app.routes import router
 from app.schemas.account import AccountCreate, AccountRead, AccountUpdate
-from app.schemas.application import ApplicationCreate, ApplicationRead, ProjectOwnerView
+from app.schemas.application import ApplicationCreate, ApplicationRead, ApplicantView, ProjectOwnerView
 from app.schemas.comment import CommentCreate, CommentRead
 from app.schemas.projects import ProjectCreate, ProjectRead
 from app.models.notifcation import Notification
@@ -521,6 +521,37 @@ async def get_applications_to_my_projects(
             "user_id": r.user_id,
             "user_name": r.user_name,
             "user_avatar": r.user_avatar,
+            "project_id": r.project_id,
+            "project_title": r.project_title,
+            "role": r.role,
+            "status": r.status,
+            "created_at": r.created_at,
+        }
+        for r in rows
+    ]
+
+
+@app.get("/applications/me", response_model=list[ApplicantView])
+async def get_my_applications(
+    current_user: Annotated[Account, Depends(get_current_user)],
+    db: Session = Depends(get_db),
+):
+    rows = (
+        db.query(
+            Application.project_id,
+            Project.title.label("project_title"),
+            Application.role,
+            Application.status,
+            Application.created_at,
+        )
+        .join(Project, Project.project_id == Application.project_id)
+        .filter(Application.user_id == current_user.user_id)
+        .filter(Project.is_deleted == False)
+        .order_by(Application.created_at.desc())
+        .all()
+    )
+    return [
+        {
             "project_id": r.project_id,
             "project_title": r.project_title,
             "role": r.role,
