@@ -66,7 +66,11 @@ logger = logging.getLogger(__name__)
 
 def _cors_allow_origins() -> list[str]:
     """Browser origins allowed for credentialed API calls (Vite dev default + optional LAN/extra from env)."""
-    defaults = ["http://localhost:5173", "http://127.0.0.1:5173"]
+    defaults = [
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        "https://dev-sync-55mh.onrender.com",
+    ]
     raw = os.getenv("CORS_ORIGINS", "").strip()
     if not raw:
         return defaults

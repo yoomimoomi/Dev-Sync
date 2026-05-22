@@ -46,8 +46,8 @@ The app splits cleanly: the React/Vite frontend goes on Vercel, the FastAPI back
 
 [`render.yaml`](render.yaml) declares the service. After the first deploy, in the Render dashboard set:
 
-- `FRONTEND_URL` → your Vercel production URL (e.g. `https://dev-sync.vercel.app`).
-- `CORS_ORIGINS` → comma-separated origins, e.g. `https://dev-sync.vercel.app`. Localhost dev origins are always included.
+- `FRONTEND_URL` → your production frontend URL (e.g. `https://dev-sync-55mh.onrender.com/`).
+- `CORS_ORIGINS` → comma-separated origins, e.g. `https://dev-sync-55mh.onrender.com/`. Localhost dev origins are always included.
 - `CORS_ORIGIN_REGEX` (optional) → allow Vercel preview URLs:
   `^https://dev-sync-[a-z0-9-]+-<your-vercel-scope>\.vercel\.app$`
 - `SUPABASE_JWT_SECRET` (if using Supabase Realtime).
