@@ -6,12 +6,14 @@ class ApplicationCreate(BaseModel):
     user_id: str | None = Field(default=None, max_length=10)
     project_id: str = Field(..., max_length=10)
     status: str | None = Field(default=None, max_length=8)
+    role: str | None = Field(default=None, max_length=20)
     content: str = Field(..., min_length=8)
 
 
 class ApplicationRead(BaseModel):
     user_id: str = Field(..., max_length=10)
     project_id: str = Field(..., max_length=10)
+    role: str | None = Field(default=None, max_length=20)
     content: str | None = None
     created_at: datetime | None = None
     status: str | None = Field(default=None, max_length=8)
@@ -33,6 +35,7 @@ class ProjectOwnerView(BaseModel):
     user_avatar: str | None = None
     project_id: str = Field(..., max_length=10)
     project_title: str = Field(..., max_length=50)
+    role: str | None = Field(default=None, max_length=20)
     status: str = Field(..., max_length=12)
     created_at: datetime
 

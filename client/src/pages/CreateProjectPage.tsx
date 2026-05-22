@@ -17,6 +17,19 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 
+const suggestedOpenRoles = [
+  'Frontend',
+  'Backend',
+  'Full Stack',
+  'Designer',
+  'Product Manager',
+  'DevOps',
+  'QA / Testing',
+  'Data Engineer',
+  'Mobile',
+  'ML Engineer',
+]
+
 const suggestedTags = [
   'React',
   'Next.js',
@@ -47,10 +60,24 @@ export function CreateProjectPage() {
   const [category, setCategory] = useState('')
   const [skillLevel, setSkillLevel] = useState('')
   const [teamSize, setTeamSize] = useState('')
+  const [openRoles, setOpenRoles] = useState<string[]>([])
+  const [roleInput, setRoleInput] = useState('')
   const [tags, setTags] = useState<string[]>([])
   const [tagInput, setTagInput] = useState('')
   const [error, setError] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
+
+  const addOpenRole = (role: string) => {
+    const trimmed = role.trim()
+    if (trimmed && !openRoles.includes(trimmed) && openRoles.length < 8) {
+      setOpenRoles([...openRoles, trimmed])
+      setRoleInput('')
+    }
+  }
+
+  const removeOpenRole = (roleToRemove: string) => {
+    setOpenRoles(openRoles.filter((role) => role !== roleToRemove))
+  }
 
   const addTag = (tag: string) => {
     if (tag && !tags.includes(tag) && tags.length < 6) {
@@ -78,6 +105,11 @@ export function CreateProjectPage() {
       return
     }
 
+    if (openRoles.length === 0) {
+      setError('Add at least one open role collaborators can apply for.')
+      return
+    }
+
     setIsSubmitting(true)
 
     try {
@@ -91,8 +123,8 @@ export function CreateProjectPage() {
           title,
           description,
           grade: skillLevel,
-          roles: [category],
-          skills: [teamSize],
+          roles: openRoles,
+          skills: [teamSize, category].filter(Boolean),
           technologies: tags,
         }),
       })
@@ -203,6 +235,54 @@ export function CreateProjectPage() {
                       <SelectItem value="large">Large (7+)</SelectItem>
                     </SelectContent>
                   </Select>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="open-roles">Open roles</Label>
+                <p className="text-xs text-muted-foreground">
+                  Roles collaborators can apply for on this project (e.g. Frontend, Backend).
+                </p>
+                <div className="mb-2 flex flex-wrap gap-2">
+                  {openRoles.map((role) => (
+                    <Badge key={role} variant="secondary" className="gap-1">
+                      {role}
+                      <button
+                        type="button"
+                        onClick={() => removeOpenRole(role)}
+                        className="ml-1 hover:text-destructive"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </Badge>
+                  ))}
+                </div>
+                <Input
+                  id="open-roles"
+                  placeholder="Add a role and press Enter"
+                  value={roleInput}
+                  onChange={(e) => setRoleInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault()
+                      addOpenRole(roleInput)
+                    }
+                  }}
+                />
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  {suggestedOpenRoles
+                    .filter((role) => !openRoles.includes(role))
+                    .slice(0, 8)
+                    .map((role) => (
+                      <button
+                        key={role}
+                        type="button"
+                        onClick={() => addOpenRole(role)}
+                        className="rounded-md bg-muted px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-muted/80"
+                      >
+                        + {role}
+                      </button>
+                    ))}
                 </div>
               </div>
 

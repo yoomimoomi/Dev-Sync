@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { type Project } from '@/components/project-card'
 import { CommentSection } from '@/components/comment-section'
 import { JoinRequestDialog } from '@/components/join-request-dialog'
+import { OpenRolesBadges } from '@/components/open-roles-badges'
 import { Button } from '@/components/ui/button'
 import { openChatHub } from '@/lib/api-config'
 import type { Comment } from '@/lib/mock-data'
@@ -102,6 +103,7 @@ export function ProjectPage() {
   const ownerAvatar = project.owner?.avatar || undefined
   const ownerUserId = project.owner?.user_id
   const acceptedMembers = project.accepted_team_members ?? []
+  const filledRoles = project.filled_roles ?? []
 
   return (
     <div className="min-h-screen bg-background">
@@ -119,8 +121,15 @@ export function ProjectPage() {
           <div className="space-y-6 lg:col-span-2">
             <Card>
               <CardHeader>
+                {project.roles.length > 0 ? (
+                  <OpenRolesBadges
+                    roles={project.roles}
+                    filledRoles={filledRoles}
+                    className="mb-3"
+                  />
+                ) : null}
                 <div className="mb-4 flex flex-wrap gap-2">
-                  {[...project.roles, ...project.skills, ...project.technologies].map((tag) => (
+                  {[...project.skills, ...project.technologies].map((tag) => (
                     <Badge key={tag} variant="secondary">
                       {tag}
                     </Badge>
@@ -167,7 +176,9 @@ export function ProjectPage() {
                         </Avatar>
                         <div>
                           <p className="text-sm font-medium">{display}</p>
-                          <p className="text-xs text-muted-foreground">Team member</p>
+                          <p className="text-xs text-muted-foreground">
+                            {member.project_role?.trim() || 'Team member'}
+                          </p>
                         </div>
                       </div>
                     )
@@ -200,6 +211,8 @@ export function ProjectPage() {
                     projectId={project.project_id}
                     projectTitle={project.title}
                     projectOwner={ownerName}
+                    projectRoles={project.roles}
+                    filledRoles={filledRoles}
                   >
                     <Button type="button" className="w-full">
                       Request to Join

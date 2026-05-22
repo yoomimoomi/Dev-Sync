@@ -21,6 +21,7 @@ import {
   openChatHub,
   TOKEN_STORAGE_KEY,
 } from '@/lib/api-config'
+import { OpenRolesBadges } from '@/components/open-roles-badges'
 import { formatTimeAgo } from '@/lib/datetime-display'
 
 type JoinRequest = {
@@ -29,6 +30,7 @@ type JoinRequest = {
   user_avatar?: string | null
   project_id: string
   project_title: string
+  role?: string | null
   status: string
   created_at: string
 }
@@ -233,16 +235,23 @@ export function ManageProjectsPage() {
                 </CardHeader>
                 <CardContent>
                   <p className="mb-4 line-clamp-2 text-sm text-muted-foreground">{project.description}</p>
+                  {project.roles.length > 0 ? (
+                    <OpenRolesBadges
+                      roles={project.roles}
+                      filledRoles={project.filled_roles ?? []}
+                      className="mb-4"
+                    />
+                  ) : null}
                   <div className="flex items-center justify-between">
                     <div className="flex flex-wrap gap-1.5">
-                      {[...project.roles, ...project.skills, ...project.technologies].slice(0, 4).map((tag) => (
+                      {[...project.skills, ...project.technologies].slice(0, 4).map((tag) => (
                         <Badge key={tag} variant="secondary" className="text-xs">
                           {tag}
                         </Badge>
                       ))}
-                      {project.roles.length + project.skills.length + project.technologies.length > 4 && (
+                      {project.skills.length + project.technologies.length > 4 && (
                         <Badge variant="outline" className="text-xs">
-                          +{project.roles.length + project.skills.length + project.technologies.length - 4} more
+                          +{project.skills.length + project.technologies.length - 4} more
                         </Badge>
                       )}
                     </div>
@@ -284,6 +293,12 @@ export function ManageProjectsPage() {
                         <p className="text-sm font-medium">{req.user_name}</p>
                         <p className="text-xs text-muted-foreground">
                           Wants to join &quot;{req.project_title}&quot;
+                          {req.role ? (
+                            <>
+                              {' '}
+                              as <span className="font-medium text-foreground">{req.role}</span>
+                            </>
+                          ) : null}
                         </p>
                       </div>
                     </div>

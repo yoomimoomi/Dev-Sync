@@ -41,9 +41,14 @@ class ProjectBase(BaseModel):
     owner_name: Optional[str] = None
 
 
+class AcceptedTeamMemberRead(AccountRead):
+    project_role: Optional[str] = None
+
+
 class ProjectRead(ProjectBase):
     owner: Optional[AccountRead] = None
     applicant_user_names: list[Optional[str]] = []
-    accepted_team_members: list[AccountRead] = []
+    accepted_team_members: list[AcceptedTeamMemberRead] = []
+    filled_roles: list[str] = []
     commenter_names: list[Optional[str]] = []
     comments: list[CommentRead] = []

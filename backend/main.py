@@ -501,6 +501,7 @@ async def get_applications_to_my_projects(
             Application.project_id,
             Project.title.label("project_title"),
             Application.status,
+            Application.role,
             Application.created_at,
         )
         .join(Account, Account.user_id == Application.user_id)
@@ -518,6 +519,7 @@ async def get_applications_to_my_projects(
             "user_avatar": r.user_avatar,
             "project_id": r.project_id,
             "project_title": r.project_title,
+            "role": r.role,
             "status": r.status,
             "created_at": r.created_at,
         }
@@ -654,10 +656,43 @@ async def create_application(
             detail="You already have an application for this project",
         )
 
+    project_roles = [r.strip() for r in (project.roles or []) if r and r.strip()]
+    selected_role = (application_in.role or "").strip()
+    if project_roles:
+        if not selected_role:
+            raise HTTPException(
+                status_code=400,
+                detail="Please select a role offered for this project",
+            )
+        if selected_role not in project_roles:
+            raise HTTPException(
+                status_code=400,
+                detail="Selected role is not offered for this project",
+            )
+        taken_apps = (
+            db.query(Application)
+            .filter(Application.project_id == application_in.project_id)
+            .filter(Application.status == "Accepted")
+            .all()
+        )
+        taken_roles = {
+            (a.role or "").strip()
+            for a in taken_apps
+            if (a.role or "").strip()
+        }
+        if selected_role in taken_roles:
+            raise HTTPException(
+                status_code=400,
+                detail="This role is no longer available for this project",
+            )
+    elif selected_role:
+        selected_role = None
+
     new_application = Application(
         user_id=current_user.user_id,
         project_id=application_in.project_id,
         status="Pending",
+        role=selected_role,
         content=application_in.content.strip(),
     )
     db.add(new_application)

@@ -42,9 +42,9 @@ class Project(Base):
         return [a.user.name for a in self.applications]
 
     @property
-    def accepted_team_members(self) -> list[Account]:
-        """Accounts with an Accepted application for this project (excludes owner)."""
-        members: list[Account] = []
+    def accepted_team_members(self) -> list[dict]:
+        """Accepted applicants with profile fields and their assigned project role."""
+        members: list[dict] = []
         seen: set[str] = set()
         for app in self.applications:
             if (app.status or "").strip().lower() != "accepted":
@@ -55,8 +55,41 @@ class Project(Base):
             if not uid or uid in seen:
                 continue
             seen.add(uid)
-            members.append(app.user)
+            user = app.user
+            members.append(
+                {
+                    "user_id": user.user_id,
+                    "name": user.name,
+                    "email": user.email,
+                    "grade": user.grade,
+                    "roles": user.roles or [],
+                    "skills": user.skills or [],
+                    "technologies": user.technologies or [],
+                    "avatar": user.avatar,
+                    "school": user.school,
+                    "bio": user.bio,
+                    "project_role": (app.role or "").strip() or None,
+                }
+            )
         return members
+
+    @property
+    def filled_roles(self) -> list[str]:
+        """Roles filled by accepted team members only."""
+        filled: list[str] = []
+        seen: set[str] = set()
+        for app in self.applications:
+            role = (app.role or "").strip()
+            if not role:
+                continue
+            status = (app.status or "").strip().lower()
+            if status != "accepted":
+                continue
+            if role in seen:
+                continue
+            seen.add(role)
+            filled.append(role)
+        return filled
 
     @property
     def commenter_names(self) -> list[Optional[str]]:

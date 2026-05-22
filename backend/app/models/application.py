@@ -22,6 +22,7 @@ class Application(Base):
     user_id: Mapped[str] = mapped_column(CHAR(10), primary_key=True)
     project_id: Mapped[str] = mapped_column(CHAR(10), primary_key=True)
     status: Mapped[Optional[str]] = mapped_column(String(8))
+    role: Mapped[Optional[str]] = mapped_column(String(20))
     content: Mapped[Optional[str]] = mapped_column(Text)
     created_at: Mapped[Optional[datetime.datetime]] = mapped_column(DateTime, server_default=text('CURRENT_TIMESTAMP'))
 
