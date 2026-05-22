@@ -1,13 +1,23 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Plus, Settings, Trash2, Eye, Users } from 'lucide-react'
+import { MessageSquare, Plus, Settings, Trash2, Eye, Users } from 'lucide-react'
 import { AuthGuard } from '@/components/auth-guard'
 import { Navbar } from '@/components/navbar'
 import { type Project } from '@/components/project-card'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
-import { Badge } from '@/components/ui/badge'
+import { Badge, type badgeVariants } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -18,18 +28,44 @@ import {
 import {
   API_BASE_URL,
   APPLICATION_SUBMITTED_EVENT,
+  openChatHub,
+  readApiErrorMessage,
   TOKEN_STORAGE_KEY,
-  avatarUrl,
 } from '@/lib/api-config'
+import { OpenRolesBadges } from '@/components/open-roles-badges'
+import { formatTimeAgo } from '@/lib/datetime-display'
+import type { VariantProps } from 'class-variance-authority'
 
 type JoinRequest = {
   user_id: string
   user_name: string
-  user_avatar: string | null
+  user_avatar?: string | null
   project_id: string
   project_title: string
+  role?: string | null
   status: string
   created_at: string
+}
+
+type OutgoingApplication = {
+  project_id: string
+  project_title: string
+  role?: string | null
+  status: string
+  created_at: string
+}
+
+type StatusBadge = {
+  label: string
+  variant: NonNullable<VariantProps<typeof badgeVariants>['variant']>
+}
+
+function applicationStatusBadge(status: string): StatusBadge {
+  const s = status.trim().toLowerCase()
+  if (s === 'declined') return { label: 'Rejected', variant: 'destructive' }
+  if (s === 'pending') return { label: 'Pending', variant: 'secondary' }
+  if (s === 'accepted') return { label: 'Accepted', variant: 'default' }
+  return { label: status.trim() || 'Unknown', variant: 'outline' }
 }
 
 function initials(name: string) {
@@ -43,7 +79,11 @@ export function ManageProjectsPage() {
   const [mounted, setMounted] = useState(false)
   const [projects, setProjects] = useState<Project[]>([])
   const [joinRequests, setJoinRequests] = useState<JoinRequest[]>([])
+  const [outgoingApplications, setOutgoingApplications] = useState<OutgoingApplication[]>([])
   const [requestActionKey, setRequestActionKey] = useState<string | null>(null)
+  const [projectToDelete, setProjectToDelete] = useState<Project | null>(null)
+  const [deletingProjectId, setDeletingProjectId] = useState<string | null>(null)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
 
   useEffect(() => {
     setMounted(true)
@@ -54,14 +94,16 @@ export function ManageProjectsPage() {
     if (!token) {
       setProjects([])
       setJoinRequests([])
+      setOutgoingApplications([])
       return
     }
 
     try {
       const headers = { Authorization: `Bearer ${token}` }
-      const [projRes, appRes] = await Promise.all([
+      const [projRes, appRes, outgoingRes] = await Promise.all([
         fetch(`${API_BASE_URL}/projects/me`, { headers }),
         fetch(`${API_BASE_URL}/applications/my-projects`, { headers }),
+        fetch(`${API_BASE_URL}/applications/me`, { headers }),
       ])
 
       if (projRes.ok) {
@@ -74,6 +116,12 @@ export function ManageProjectsPage() {
         setJoinRequests((await appRes.json()) as JoinRequest[])
       } else {
         setJoinRequests([])
+      }
+
+      if (outgoingRes.ok) {
+        setOutgoingApplications((await outgoingRes.json()) as OutgoingApplication[])
+      } else {
+        setOutgoingApplications([])
       }
     } catch (error) {
       console.error('Error loading manage projects:', error)
@@ -137,6 +185,37 @@ export function ManageProjectsPage() {
     }
   }
 
+  const handleDeleteProject = async () => {
+    if (!projectToDelete) return
+    const token = localStorage.getItem(TOKEN_STORAGE_KEY)
+    if (!token) return
+
+    setDeletingProjectId(projectToDelete.project_id)
+    setDeleteError(null)
+    try {
+      const res = await fetch(
+        `${API_BASE_URL}/project/${projectToDelete.project_id}`,
+        {
+          method: 'PATCH',
+          headers: { Authorization: `Bearer ${token}` },
+        },
+      )
+      if (!res.ok) {
+        const message = await readApiErrorMessage(res)
+        throw new Error(message)
+      }
+      setProjectToDelete(null)
+      void loadDashboard()
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : 'Failed to delete project'
+      setDeleteError(message)
+      console.error('Error deleting project:', error)
+    } finally {
+      setDeletingProjectId(null)
+    }
+  }
+
   return (
     <AuthGuard>
     <div className="min-h-screen bg-background">
@@ -166,15 +245,18 @@ export function ManageProjectsPage() {
           </Card>
         ) : (
           <div className="space-y-4">
-            {projects.map((project) => (
+            {projects.map((project) => {
+              const ownerName = project.owner?.name?.trim() || 'Unknown'
+              const ownerAvatar = project.owner?.avatar || undefined
+              return (
               <Card key={project.project_id} className="transition-all hover:shadow-md">
                 <CardHeader className="pb-3">
                   <div className="flex items-start justify-between">
                     <div className="flex items-center gap-4">
                       <Avatar className="h-10 w-10">
-                        <AvatarImage src={avatarUrl(project.owner.avatar_path)} alt={project.owner.name} />
+                        <AvatarImage src={ownerAvatar} alt={ownerName} />
                         <AvatarFallback className="bg-primary text-primary-foreground">
-                          {project.owner.name.slice(0, 2).toUpperCase()}
+                          {ownerName.slice(0, 2).toUpperCase()}
                         </AvatarFallback>
                       </Avatar>
                       <div>
@@ -191,7 +273,7 @@ export function ManageProjectsPage() {
                           <Link to={`/users/${project.user_id}`} className="hover:text-primary hover:underline">
                             {project.owner.name}
                           </Link>{" "}
-                          · Created on {project.created_at}
+                          <p className="text-sm text-muted-foreground">Created {formatTimeAgo(project.created_at)}</p>
                         </p>
                       </div>
                     </div>
@@ -219,7 +301,14 @@ export function ManageProjectsPage() {
                             Edit Project
                           </DropdownMenuItem>
                           <DropdownMenuSeparator />
-                          <DropdownMenuItem className="text-destructive focus:text-destructive">
+                          <DropdownMenuItem
+                            className="text-destructive focus:text-destructive"
+                            onSelect={(e) => {
+                              e.preventDefault()
+                              setDeleteError(null)
+                              setProjectToDelete(project)
+                            }}
+                          >
                             <Trash2 className="mr-2 h-4 w-4" />
                             Delete Project
                           </DropdownMenuItem>
@@ -235,16 +324,23 @@ export function ManageProjectsPage() {
                 </CardHeader>
                 <CardContent>
                   <p className="mb-4 line-clamp-2 text-sm text-muted-foreground">{project.description}</p>
+                  {project.roles.length > 0 ? (
+                    <OpenRolesBadges
+                      roles={project.roles}
+                      filledRoles={project.filled_roles ?? []}
+                      className="mb-4"
+                    />
+                  ) : null}
                   <div className="flex items-center justify-between">
                     <div className="flex flex-wrap gap-1.5">
-                      {[...project.roles, ...project.skills, ...project.technologies].slice(0, 4).map((tag) => (
+                      {[...project.skills, ...project.technologies].slice(0, 4).map((tag) => (
                         <Badge key={tag} variant="secondary" className="text-xs">
                           {tag}
                         </Badge>
                       ))}
-                      {project.roles.length + project.skills.length + project.technologies.length > 4 && (
+                      {project.skills.length + project.technologies.length > 4 && (
                         <Badge variant="outline" className="text-xs">
-                          +{project.roles.length + project.skills.length + project.technologies.length - 4} more
+                          +{project.skills.length + project.technologies.length - 4} more
                         </Badge>
                       )}
                     </div>
@@ -257,7 +353,7 @@ export function ManageProjectsPage() {
                   </div>
                 </CardContent>
               </Card>
-            ))}
+            )})}
           </div>
         )}
 
@@ -279,7 +375,7 @@ export function ManageProjectsPage() {
                   >
                     <div className="flex items-center gap-3">
                       <Avatar>
-                        <AvatarImage src={avatarUrl(req.user_avatar)} alt={req.user_name} />
+                        <AvatarImage src={req.user_avatar || undefined} alt={req.user_name} />
                         <AvatarFallback>{initials(req.user_name)}</AvatarFallback>
                       </Avatar>
                       <div>
@@ -288,10 +384,33 @@ export function ManageProjectsPage() {
                         </Link>
                         <p className="text-xs text-muted-foreground">
                           Wants to join &quot;{req.project_title}&quot;
+                          {req.role ? (
+                            <>
+                              {' '}
+                              as <span className="font-medium text-foreground">{req.role}</span>
+                            </>
+                          ) : null}
                         </p>
                       </div>
                     </div>
-                    <div className="flex gap-2">
+                    <div className="flex flex-wrap justify-end gap-2">
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        type="button"
+                        onClick={() =>
+                          openChatHub({
+                            project_id: req.project_id,
+                            project_title: req.project_title,
+                            peer_user_id: req.user_id,
+                            peer_name: req.user_name,
+                            peer_avatar: req.user_avatar ?? null,
+                          })
+                        }
+                      >
+                        <MessageSquare className="mr-2 h-4 w-4" />
+                        Message
+                      </Button>
                       <Button
                         size="sm"
                         disabled={requestActionKey !== null}
@@ -314,6 +433,91 @@ export function ManageProjectsPage() {
             </div>
           </CardContent>
         </Card>
+
+        <Card className="mt-8">
+          <CardHeader>
+            <CardTitle className="text-lg">Outgoing Applications</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              {outgoingApplications.length === 0 ? (
+                <div className="rounded-lg bg-muted/30 p-4 text-sm text-muted-foreground">
+                  No applications yet.
+                </div>
+              ) : (
+                outgoingApplications.map((app) => {
+                  const statusBadge = applicationStatusBadge(app.status)
+                  return (
+                    <div
+                      key={app.project_id}
+                      className="flex items-center justify-between rounded-lg bg-muted/50 p-4"
+                    >
+                      <div>
+                        <p className="text-sm font-medium">
+                          <Link
+                            to={`/project/${app.project_id}`}
+                            className="transition-colors hover:text-primary"
+                          >
+                            {app.project_title}
+                          </Link>
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          Applied {formatTimeAgo(app.created_at)}
+                          {app.role ? (
+                            <>
+                              {' '}
+                              as <span className="font-medium text-foreground">{app.role}</span>
+                            </>
+                          ) : null}
+                        </p>
+                      </div>
+                      <Badge variant={statusBadge.variant}>{statusBadge.label}</Badge>
+                    </div>
+                  )
+                })
+              )}
+            </div>
+          </CardContent>
+        </Card>
+
+        <AlertDialog
+          open={projectToDelete !== null}
+          onOpenChange={(open) => {
+            if (!open && deletingProjectId === null) {
+              setProjectToDelete(null)
+              setDeleteError(null)
+            }
+          }}
+        >
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Delete project?</AlertDialogTitle>
+              <AlertDialogDescription>
+                This will permanently remove &quot;{projectToDelete?.title}&quot; from
+                Dev-Sync. Join requests and applications for this project will no longer
+                appear. This action cannot be undone.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            {deleteError ? (
+              <p className="text-sm text-destructive">{deleteError}</p>
+            ) : null}
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={deletingProjectId !== null}>
+                Cancel
+              </AlertDialogCancel>
+              <AlertDialogAction
+                className="bg-destructive text-white hover:bg-destructive/90"
+                disabled={deletingProjectId !== null}
+                onClick={(e) => {
+                  e.preventDefault()
+                  void handleDeleteProject()
+                }}
+              >
+                {deletingProjectId !== null ? 'Deleting…' : 'Delete'}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </main>
     </div>
     </AuthGuard>

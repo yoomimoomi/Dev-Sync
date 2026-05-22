@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Navbar } from '@/components/navbar'
 import { ProjectCard, type Project } from '@/components/project-card'
@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -14,77 +15,77 @@ import {
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
-import { Mail, Calendar, Edit, User, Camera } from 'lucide-react'
+import { Mail, Calendar, Edit, GraduationCap } from 'lucide-react'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000'
 const TOKEN_STORAGE_KEY = 'devsync_access_token'
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL ?? 'https://mdacciknqnhpqswwishp.supabase.co'
-
-const GRADE_OPTIONS = ['Freshman', 'Sophomore', 'Junior', 'Senior', 'Graduate']
 
 type Profile = {
   user_id: string
   name: string
   email: string
   grade: string | null
-  bio: string | null
   roles: string[]
   skills: string[]
   technologies: string[]
-  avatar_path?: string | null
+  avatar: string | null
+  school: string | null
+  bio: string | null
 }
 
-function initials(name: string) {
-  return name
-    .split(' ')
+function firstInitial(name: string) {
+  return name.trim().charAt(0).toUpperCase()
+}
+
+// UI uses comma-separated text for list fields; we round-trip through these helpers
+// so the user can type "react, fastapi" and we send ["react","fastapi"] to the API.
+function listToText(values: string[] | null | undefined) {
+  return (values ?? []).join(', ')
+}
+
+function textToList(text: string) {
+  return text
+    .split(',')
+    .map((s) => s.trim())
     .filter(Boolean)
-    .map((n) => n[0])
-    .join('')
-    .slice(0, 2)
-    .toUpperCase()
 }
 
-async function uploadAvatar(token: string, file: File): Promise<string> {
-  const form = new FormData()
-  form.append('file', file)
-  const res = await fetch(`${API_BASE_URL}/user/me/avatar`, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${token}` },
-    body: form,
-  })
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}))
-    const detail = typeof err.detail === 'string' ? err.detail : JSON.stringify(err.detail ?? err)
-    throw new Error(detail || `Upload failed (${res.status})`)
+// FastAPI returns `detail: string` for most errors and `detail: ValidationError[]` for 422.
+// Flatten both into one human-readable line so the dialog can show the real cause.
+type ValidationIssue = { loc?: Array<string | number>; msg?: string }
+
+async function extractErrorMessage(response: Response): Promise<string> {
+  const body = (await response.json().catch(() => null)) as
+    | { detail?: string | ValidationIssue[] }
+    | null
+  const detail = body?.detail
+  if (typeof detail === 'string') return detail
+  if (Array.isArray(detail) && detail.length > 0) {
+    return detail
+      .map((issue) => {
+        const field = (issue.loc ?? []).filter((p) => p !== 'body').join('.')
+        return field ? `${field}: ${issue.msg ?? 'invalid'}` : (issue.msg ?? 'invalid')
+      })
+      .join('; ')
   }
-  const data = await res.json()
-  return data as string
+  return `Request failed (${response.status})`
 }
 
 export function ProfilePage() {
   const [projects, setProjects] = useState<Project[]>([])
   const [profile, setProfile] = useState<Profile | null>(null)
-  const [avatarUrl, setAvatarUrl] = useState<string | null>(null)
 
-  const [editOpen, setEditOpen] = useState(false)
-  const [firstName, setFirstName] = useState('')
-  const [lastName, setLastName] = useState('')
-  const [email, setEmail] = useState('')
-  const [grade, setGrade] = useState('')
-  const [bio, setBio] = useState('')
-  const [picturePreview, setPicturePreview] = useState<string | null>(null)
-  const [pictureFile, setPictureFile] = useState<File | null>(null)
-  const [saving, setSaving] = useState(false)
-  const [saveError, setSaveError] = useState<string | null>(null)
-
-  const fileInputRef = useRef<HTMLInputElement>(null)
+  const [isEditOpen, setIsEditOpen] = useState(false)
+  const [editName, setEditName] = useState('')
+  const [editGrade, setEditGrade] = useState('')
+  const [editSchool, setEditSchool] = useState('')
+  const [editBio, setEditBio] = useState('')
+  const [editAvatar, setEditAvatar] = useState('')
+  const [editRoles, setEditRoles] = useState('')
+  const [editSkills, setEditSkills] = useState('')
+  const [editTechnologies, setEditTechnologies] = useState('')
+  const [editError, setEditError] = useState('')
+  const [isSaving, setIsSaving] = useState(false)
 
   useEffect(() => {
     const fetchProfilePageData = async () => {
@@ -109,11 +110,6 @@ export function ProfilePage() {
 
         setProfile(profileData)
         setProjects(projectData)
-        setAvatarUrl(
-          profileData.avatar_path
-            ? `${SUPABASE_URL}/storage/v1/object/public/${profileData.avatar_path}`
-            : null
-        )
       } catch (error) {
         console.error('Error fetching profile page data:', error)
       }
@@ -123,72 +119,59 @@ export function ProfilePage() {
 
   const openEditDialog = () => {
     if (!profile) return
-    const parts = profile.name.trim().split(' ')
-    setFirstName(parts[0] ?? '')
-    setLastName(parts.slice(1).join(' '))
-    setEmail(profile.email)
-    setGrade(profile.grade ?? '')
-    setBio(profile.bio ?? '')
-    setPicturePreview(avatarUrl)
-    setPictureFile(null)
-    setSaveError(null)
-    setEditOpen(true)
+    setEditName(profile.name ?? '')
+    setEditGrade(profile.grade ?? '')
+    setEditSchool(profile.school ?? '')
+    setEditBio(profile.bio ?? '')
+    setEditAvatar(profile.avatar ?? '')
+    setEditRoles(listToText(profile.roles))
+    setEditSkills(listToText(profile.skills))
+    setEditTechnologies(listToText(profile.technologies))
+    setEditError('')
+    setIsEditOpen(true)
   }
 
-  const handlePictureChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file) return
-    setPictureFile(file)
-    const reader = new FileReader()
-    reader.onload = (ev) => {
-      setPicturePreview(ev.target?.result as string)
+  const handleSaveProfile = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setEditError('')
+
+    const token = localStorage.getItem(TOKEN_STORAGE_KEY)
+    if (!token) {
+      setEditError('You need to be logged in to edit your profile.')
+      return
     }
-    reader.readAsDataURL(file)
-  }
 
-  const handleSave = async () => {
-    if (!profile) return
-    setSaving(true)
-    setSaveError(null)
-
+    setIsSaving(true)
     try {
-      const token = localStorage.getItem(TOKEN_STORAGE_KEY)
-      const fullName = [firstName.trim(), lastName.trim()].filter(Boolean).join(' ')
+      const response = await fetch(`${API_BASE_URL}/user/me`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          name: editName.trim(),
+          grade: editGrade.trim() || null,
+          school: editSchool.trim() || null,
+          bio: editBio.trim() || null,
+          avatar: editAvatar.trim() || null,
+          roles: textToList(editRoles),
+          skills: textToList(editSkills),
+          technologies: textToList(editTechnologies),
+        }),
+      })
 
-      const body: Record<string, string | null> = {}
-      if (fullName !== profile.name) body.name = fullName
-      if (email !== profile.email) body.email = email
-      if ((grade || null) !== profile.grade) body.grade = grade || null
-      if ((bio.trim() || null) !== profile.bio) body.bio = bio.trim() || null
-
-      if (Object.keys(body).length > 0) {
-        const res = await fetch(`${API_BASE_URL}/user/me`, {
-          method: 'PATCH',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify(body),
-        })
-        if (!res.ok) {
-          const err = await res.json().catch(() => ({}))
-          throw new Error(err.detail ?? 'Failed to update profile')
-        }
-        const updated: Profile = await res.json()
-        setProfile(updated)
+      if (!response.ok) {
+        throw new Error(await extractErrorMessage(response))
       }
 
-      if (pictureFile && token) {
-        const avatarPath= await uploadAvatar(token, pictureFile)
-        setAvatarUrl(`${SUPABASE_URL}/storage/v1/object/public/${avatarPath}`)
-        setProfile((prev) => (prev ? { ...prev, avatar_path: avatarPath } : prev))
-      }
-
-      setEditOpen(false)
+      const updated: Profile = await response.json()
+      setProfile(updated)
+      setIsEditOpen(false)
     } catch (err) {
-      setSaveError(err instanceof Error ? err.message : 'Something went wrong')
+      setEditError(err instanceof Error ? err.message : 'Failed to update profile')
     } finally {
-      setSaving(false)
+      setIsSaving(false)
     }
   }
 
@@ -203,23 +186,31 @@ export function ProfilePage() {
             <Card>
               <CardContent className="pt-6">
                 <div className="flex flex-col items-center text-center">
-                  <div className="relative flex h-24 w-24 items-center justify-center rounded-full bg-primary/10 text-4xl font-bold text-primary overflow-hidden">
-                    {avatarUrl ? (
-                      <img
-                        src={avatarUrl}
-                        alt="Profile"
-                        className="h-full w-full object-cover"
-                        onError={() => setAvatarUrl(null)}
-                      />
-                    ) : (
-                      profile ? initials(profile.name) : '??'
-                    )}
-                  </div>
+                  {profile?.avatar ? (
+                    <img
+                      src={profile.avatar}
+                      alt={profile.name}
+                      className="h-24 w-24 rounded-full object-cover"
+                    />
+                  ) : (
+                    <div className="flex h-24 w-24 items-center justify-center rounded-full bg-primary/10 text-4xl font-bold text-primary">
+                      {profile ? firstInitial(profile.name) : '?'}
+                    </div>
+                  )}
                   <h1 className="mt-4 text-xl font-bold text-foreground">{profile?.name ?? 'Profile'}</h1>
                   <p className="mt-2 text-sm text-muted-foreground">
-                    {profile?.grade ? `${profile.grade} developer` : 'Logged-in DevSync user'}
+                    {profile && profile.roles.length > 0
+                      ? profile.roles.join(' · ')
+                      : profile?.grade
+                        ? `${profile.grade} developer`
+                        : 'Logged-in DevSync user'}
                   </p>
-                  <Button className="mt-4 w-full" variant="outline" onClick={openEditDialog}>
+                  <Button
+                    className="mt-4 w-full"
+                    variant="outline"
+                    onClick={openEditDialog}
+                    disabled={!profile}
+                  >
                     <Edit className="mr-2 h-4 w-4" />
                     Edit Profile
                   </Button>
@@ -231,8 +222,10 @@ export function ProfilePage() {
                     <span className="text-muted-foreground">{profile?.email ?? 'No email available'}</span>
                   </div>
                   <div className="flex items-center gap-3 text-sm">
-                    <User className="h-4 w-4 text-muted-foreground" />
-                    <span className="text-muted-foreground">{profile?.user_id ?? 'No user id available'}</span>
+                    <GraduationCap className="h-4 w-4 text-muted-foreground" />
+                    <span className="text-muted-foreground">
+                      {profile?.school?.trim() ? profile.school : 'School not set'}
+                    </span>
                   </div>
                   <div className="flex items-center gap-3 text-sm">
                     <Calendar className="h-4 w-4 text-muted-foreground" />
@@ -240,10 +233,24 @@ export function ProfilePage() {
                       {profile?.grade ? `Grade: ${profile.grade}` : 'Grade not set'}
                     </span>
                   </div>
-                  <p className="text-sm text-muted-foreground whitespace-pre-wrap">
-                    {profile?.bio || 'No bio yet'}
-                  </p>
                 </div>
+              </CardContent>
+            </Card>
+
+            <Card className="mt-6">
+              <CardHeader>
+                <CardTitle className="text-lg">About</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {profile?.bio?.trim() ? (
+                  <p className="whitespace-pre-wrap text-sm text-muted-foreground">
+                    {profile.bio}
+                  </p>
+                ) : (
+                  <p className="text-sm text-muted-foreground italic">
+                    No bio yet. Click <span className="font-medium">Edit Profile</span> to add one.
+                  </p>
+                )}
               </CardContent>
             </Card>
 
@@ -295,9 +302,9 @@ export function ProfilePage() {
             </div>
 
             <div className="space-y-4">
-              {projects.map((project) => (
-                <ProjectCard key={project.project_id} project={project} />
-              ))}
+                {projects.map((project) => (
+                  <ProjectCard key={project.project_id} project={project} />
+                ))}
             </div>
 
             {projects.length === 0 && (
@@ -314,119 +321,126 @@ export function ProfilePage() {
         </div>
       </main>
 
-      <Dialog open={editOpen} onOpenChange={setEditOpen}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
+      <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
+        <DialogContent className="flex max-h-[90vh] flex-col sm:max-w-lg">
+          <DialogHeader className="shrink-0">
             <DialogTitle>Edit Profile</DialogTitle>
+            <DialogDescription>Update your public profile details.</DialogDescription>
           </DialogHeader>
-
-          <div className="space-y-5 py-2">
-            {/* Profile picture */}
-            <div className="flex flex-col items-center gap-3">
-              <div
-                className="relative flex h-24 w-24 cursor-pointer items-center justify-center rounded-full bg-primary/10 text-4xl font-bold text-primary overflow-hidden ring-2 ring-border hover:ring-primary transition-all"
-                onClick={() => fileInputRef.current?.click()}
-              >
-                {picturePreview ? (
-                  <img src={picturePreview} alt="Preview" className="h-full w-full object-cover" />
-                ) : (
-                  <span>{firstName || lastName ? initials(`${firstName} ${lastName}`) : '??'}</span>
-                )}
-                <div className="absolute inset-0 flex items-center justify-center rounded-full bg-black/40 opacity-0 hover:opacity-100 transition-opacity">
-                  <Camera className="h-6 w-6 text-white" />
-                </div>
+          <form
+            onSubmit={handleSaveProfile}
+            className="flex min-h-0 flex-1 flex-col"
+          >
+            <div className="-mr-2 min-h-0 flex-1 space-y-4 overflow-y-auto pr-2">
+            {editError ? (
+              <div className="rounded-md border border-destructive/20 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                {editError}
               </div>
-              <button
-                type="button"
-                className="text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground"
-                onClick={() => fileInputRef.current?.click()}
-              >
-                Change picture
-              </button>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*"
-                className="hidden"
-                onChange={handlePictureChange}
-              />
-            </div>
+            ) : null}
 
-            {/* Name row */}
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label htmlFor="firstName">First name</Label>
-                <Input
-                  id="firstName"
-                  value={firstName}
-                  onChange={(e) => setFirstName(e.target.value)}
-                  placeholder="First"
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="lastName">Last name</Label>
-                <Input
-                  id="lastName"
-                  value={lastName}
-                  onChange={(e) => setLastName(e.target.value)}
-                  placeholder="Last"
-                />
-              </div>
-            </div>
-
-            {/* Email */}
-            <div className="space-y-1.5">
-              <Label htmlFor="email">Email</Label>
+            <div className="space-y-2">
+              <Label htmlFor="edit-name">Name</Label>
               <Input
-                id="email"
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="you@example.com"
+                id="edit-name"
+                value={editName}
+                onChange={(e) => setEditName(e.target.value)}
+                maxLength={50}
+                required
               />
             </div>
 
-            {/* Grade */}
-            <div className="space-y-1.5">
-              <Label>Grade</Label>
-              <Select value={grade} onValueChange={setGrade}>
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Select grade" />
-                </SelectTrigger>
-                <SelectContent>
-                  {GRADE_OPTIONS.map((g) => (
-                    <SelectItem key={g} value={g}>
-                      {g}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+            <div className="space-y-2">
+              <Label htmlFor="edit-grade">Grade</Label>
+              <Input
+                id="edit-grade"
+                placeholder="e.g. Sophomore"
+                value={editGrade}
+                onChange={(e) => setEditGrade(e.target.value)}
+                maxLength={10}
+              />
             </div>
 
-            <div className="space-y-1.5">
-              <Label htmlFor="bio">Bio</Label>
+            <div className="space-y-2">
+              <Label htmlFor="edit-school">School / University</Label>
+              <Input
+                id="edit-school"
+                placeholder="e.g. Stanford University"
+                value={editSchool}
+                onChange={(e) => setEditSchool(e.target.value)}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="edit-bio">Bio</Label>
               <Textarea
-                id="bio"
-                value={bio}
-                onChange={(e) => setBio(e.target.value)}
-                placeholder="Tell others about yourself..."
-                className="min-h-[96px]"
+                id="edit-bio"
+                placeholder="A short blurb about yourself, what you're working on, what you're looking to learn..."
+                className="min-h-24"
+                value={editBio}
+                onChange={(e) => setEditBio(e.target.value)}
               />
             </div>
 
-            {saveError && (
-              <p className="text-sm text-destructive">{saveError}</p>
-            )}
-          </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-avatar">Avatar URL</Label>
+              <Input
+                id="edit-avatar"
+                placeholder="https://..."
+                value={editAvatar}
+                onChange={(e) => setEditAvatar(e.target.value)}
+              />
+              {editAvatar.trim() ? (
+                <img
+                  src={editAvatar}
+                  alt="Avatar preview"
+                  className="mt-2 h-16 w-16 rounded-full object-cover"
+                />
+              ) : null}
+            </div>
 
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setEditOpen(false)} disabled={saving}>
-              Cancel
-            </Button>
-            <Button onClick={handleSave} disabled={saving}>
-              {saving ? 'Saving…' : 'Save changes'}
-            </Button>
-          </DialogFooter>
+            <div className="space-y-2">
+              <Label htmlFor="edit-roles">Intended Roles</Label>
+              <Input
+                id="edit-roles"
+                placeholder="Comma-separated, e.g. Frontend, Designer"
+                value={editRoles}
+                onChange={(e) => setEditRoles(e.target.value)}
+              />
+              <p className="text-xs text-muted-foreground">
+                Roles you&apos;d like to take on in projects. Shown on your profile.
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="edit-skills">Skills</Label>
+              <Input
+                id="edit-skills"
+                placeholder="Comma-separated, e.g. UI, Testing"
+                value={editSkills}
+                onChange={(e) => setEditSkills(e.target.value)}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="edit-technologies">Technologies</Label>
+              <Input
+                id="edit-technologies"
+                placeholder="Comma-separated, e.g. React, FastAPI"
+                value={editTechnologies}
+                onChange={(e) => setEditTechnologies(e.target.value)}
+              />
+            </div>
+            </div>
+
+            <DialogFooter className="mt-4 shrink-0 border-t pt-4">
+              <Button type="button" variant="outline" onClick={() => setIsEditOpen(false)} disabled={isSaving}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={isSaving}>
+                {isSaving ? 'Saving...' : 'Save changes'}
+              </Button>
+            </DialogFooter>
+          </form>
         </DialogContent>
       </Dialog>
     </div>

@@ -16,6 +16,13 @@ import {
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import {
   APPLICATION_SUBMITTED_EVENT,
   API_BASE_URL,
   readApiErrorMessage,
@@ -27,6 +34,10 @@ interface JoinRequestDialogProps {
   projectId: string
   projectTitle: string
   projectOwner: string
+  /** Open roles still available to apply for. */
+  projectRoles?: string[]
+  /** Roles already filled by accepted members. */
+  filledRoles?: string[]
   intent?: 'join' | 'contact'
   children: ReactNode
 }
@@ -35,6 +46,8 @@ export function JoinRequestDialog({
   projectId,
   projectTitle,
   projectOwner,
+  projectRoles = [],
+  filledRoles = [],
   children,
 }: JoinRequestDialogProps) {
   const { isAuthenticated, user } = useAuth()
@@ -43,6 +56,11 @@ export function JoinRequestDialog({
   const [pending, setPending] = useState(false)
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [description, setDescription] = useState('')
+  const [selectedRole, setSelectedRole] = useState('')
+
+  const filledSet = new Set(filledRoles.map((r) => r.trim()).filter(Boolean))
+  const offeredRoles = projectRoles.map((r) => r.trim()).filter(Boolean)
+  const selectableRoles = offeredRoles.filter((r) => !filledSet.has(r))
 
   const resetFormAndCloseSoon = () => {
     setSubmitted(true)
@@ -51,6 +69,7 @@ export function JoinRequestDialog({
       setSubmitted(false)
       setSubmitError(null)
       setDescription('')
+      setSelectedRole('')
     }, 2000)
   }
 
@@ -81,11 +100,22 @@ export function JoinRequestDialog({
       return
     }
 
+    const role = selectedRole.trim()
+    if (selectableRoles.length > 0 && !role) {
+      setSubmitError('Please select which role you are applying for.')
+      return
+    }
+    if (role && filledSet.has(role)) {
+      setSubmitError('This role is no longer available.')
+      return
+    }
+
     const requestPayload = {
       user_id: user.id,
       project_id: trimmedProjectId,
       status: 'Pending',
       content,
+      ...(role ? { role } : {}),
     }
 
     setPending(true)
@@ -172,6 +202,30 @@ export function JoinRequestDialog({
                   {submitError}
                 </p>
               )}
+              {offeredRoles.length > 0 ? (
+                <div className="space-y-2">
+                  <Label htmlFor="jr-role">Role you&apos;re applying for</Label>
+                  {selectableRoles.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">
+                      All open roles are currently filled.
+                    </p>
+                  ) : (
+                    <Select value={selectedRole} onValueChange={setSelectedRole}>
+                      <SelectTrigger id="jr-role">
+                        <SelectValue placeholder="Select a role" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {selectableRoles.map((role) => (
+                          <SelectItem key={role} value={role}>
+                            {role}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+                </div>
+              ) : null}
+
               <div className="space-y-2">
                 <Label htmlFor="jr-motivation">Why do you want to join?</Label>
                 <Textarea

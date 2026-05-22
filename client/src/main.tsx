@@ -1,6 +1,6 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
-import { createBrowserRouter, Navigate, RouterProvider } from 'react-router-dom'
+import { createBrowserRouter, Navigate, Outlet, RouterProvider } from 'react-router-dom'
 import '@fontsource/geist-sans/400.css'
 import '@fontsource/geist-sans/500.css'
 import '@fontsource/geist-sans/600.css'
@@ -9,14 +9,25 @@ import '@fontsource/geist-mono/400.css'
 import '@fontsource/geist-mono/500.css'
 import './index.css'
 import { AuthProvider } from './lib/auth-context'
+import { ChatRealtimeProvider } from './lib/chat-realtime-context'
 import { SearchProvider } from './lib/search-context'
 import { ThemeProvider } from './lib/theme-context'
+import { MessagingHub } from './components/messaging-hub'
 import { CreateProjectPage } from './pages/CreateProjectPage'
 import { HomePage } from './pages/HomePage'
 import { ManageProjectsPage } from './pages/ManageProjectsPage'
 import { ProfilePage } from './pages/ProfilePage'
 import { ProjectPage } from './pages/ProjectPage'
 import { UserProfilePage } from './pages/UserProfilePage'
+
+function RootLayout() {
+  return (
+    <>
+      <Outlet />
+      <MessagingHub />
+    </>
+  )
+}
 
 const router = createBrowserRouter([
   { path: '/', element: <HomePage /> },
@@ -32,9 +43,11 @@ createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <ThemeProvider>
       <AuthProvider>
-        <SearchProvider>
-          <RouterProvider router={router} />
-        </SearchProvider>
+        <ChatRealtimeProvider>
+          <SearchProvider>
+            <RouterProvider router={router} />
+          </SearchProvider>
+        </ChatRealtimeProvider>
       </AuthProvider>
     </ThemeProvider>
   </StrictMode>,

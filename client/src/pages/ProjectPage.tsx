@@ -8,29 +8,13 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { type Project } from '@/components/project-card'
 import { CommentSection } from '@/components/comment-section'
 import { JoinRequestDialog } from '@/components/join-request-dialog'
+import { OpenRolesBadges } from '@/components/open-roles-badges'
 import { Button } from '@/components/ui/button'
+import { openChatHub } from '@/lib/api-config'
 import type { Comment } from '@/lib/mock-data'
-import { avatarUrl } from '@/lib/api-config'
+import { formatTimeAgo } from '@/lib/datetime-display'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000'
-
-function formatTimeAgo(input: string) {
-  const date = new Date(input)
-  if (Number.isNaN(date.getTime())) return input
-
-  const diffMs = Math.max(0, Date.now() - date.getTime())
-
-  const minute = 60 * 1000
-  const hour = 60 * minute
-  const day = 24 * hour
-  const week = 7 * day
-
-  if (diffMs < minute) return 'just now'
-  if (diffMs < hour) return `${Math.floor(diffMs / minute)}m`
-  if (diffMs < day) return `${Math.floor(diffMs / hour)}h`
-  if (diffMs < week) return `${Math.floor(diffMs / day)}d`
-  return `${Math.floor(diffMs / week)}w`
-}
 
 export function ProjectPage() {
   const { id = '' } = useParams()
@@ -86,17 +70,40 @@ export function ProjectPage() {
     )
   }
 
-  const projectComments: Comment[] = project.comments.map((comment) => ({
-    id: `${comment.user_id}-${comment.project_id}`,
-    projectId: comment.project_id,
-    author: {
-      user_id: comment.user_id,
-      name: comment.user?.name ?? 'Unknown User',
-      avatar_path: comment.user?.avatar_path,
-    },
-    content: comment.content ?? '',
-    createdAt: comment.created_at ?? '',
-  }))
+  // Flatten the API rows into the UI Comment shape, then nest replies under
+  // their parents using `reply_to`. Replies that point at an unknown parent
+  // fall back to top-level so they're never silently dropped.
+  const flatById = new Map<string, Comment>()
+  for (const c of project.comments) {
+    flatById.set(c.comment_id, {
+      id: c.comment_id,
+      projectId: c.project_id,
+      author: {
+        name: c.user?.name ?? 'Unknown User',
+        avatar: c.user?.avatar ?? undefined,
+      },
+      content: c.content ?? '',
+      createdAt: c.created_at ?? '',
+      replies: [],
+    })
+  }
+  const projectComments: Comment[] = []
+  for (const c of project.comments) {
+    const node = flatById.get(c.comment_id)
+    if (!node) continue
+    const parent = c.reply_to ? flatById.get(c.reply_to) : undefined
+    if (parent) {
+      parent.replies = [...(parent.replies ?? []), node]
+    } else {
+      projectComments.push(node)
+    }
+  }
+
+  const ownerName = project.owner?.name?.trim() || 'Unknown'
+  const ownerAvatar = project.owner?.avatar || undefined
+  const ownerUserId = project.owner?.user_id
+  const acceptedMembers = project.accepted_team_members ?? []
+  const filledRoles = project.filled_roles ?? []
 
   return (
     <div className="min-h-screen bg-background">
@@ -114,8 +121,15 @@ export function ProjectPage() {
           <div className="space-y-6 lg:col-span-2">
             <Card>
               <CardHeader>
+                {project.roles.length > 0 ? (
+                  <OpenRolesBadges
+                    roles={project.roles}
+                    filledRoles={filledRoles}
+                    className="mb-3"
+                  />
+                ) : null}
                 <div className="mb-4 flex flex-wrap gap-2">
-                  {[...project.roles, ...project.skills, ...project.technologies].map((tag) => (
+                  {[...project.skills, ...project.technologies].map((tag) => (
                     <Badge key={tag} variant="secondary">
                       {tag}
                     </Badge>
@@ -139,9 +153,9 @@ export function ProjectPage() {
                 <div className="flex flex-wrap gap-4">
                   <div className="flex items-center gap-3">
                     <Avatar>
-                      <AvatarImage src={avatarUrl(project.owner.avatar_path)} alt={project.owner.name} />
+                      <AvatarImage src={ownerAvatar} alt={ownerName} />
                       <AvatarFallback className="bg-primary text-primary-foreground">
-                        {project.owner.name.slice(0, 2).toUpperCase()}
+                        {ownerName.slice(0, 2).toUpperCase()}
                       </AvatarFallback>
                     </Avatar>
                     <div>
@@ -151,6 +165,26 @@ export function ProjectPage() {
                       <p className="text-xs text-muted-foreground">Project Lead</p>
                     </div>
                   </div>
+                  {acceptedMembers.map((member) => {
+                    const display = member.name?.trim() || member.email?.trim() || 'Member'
+                    const memberAvatar = member.avatar || undefined
+                    return (
+                      <div key={member.user_id} className="flex items-center gap-3">
+                        <Avatar>
+                          <AvatarImage src={memberAvatar} alt={display} />
+                          <AvatarFallback className="bg-muted text-muted-foreground">
+                            {display.slice(0, 2).toUpperCase()}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div>
+                          <p className="text-sm font-medium">{display}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {member.project_role?.trim() || 'Team member'}
+                          </p>
+                        </div>
+                      </div>
+                    )
+                  })}
                 </div>
               </CardContent>
             </Card>
@@ -178,21 +212,33 @@ export function ProjectPage() {
                   <JoinRequestDialog
                     projectId={project.project_id}
                     projectTitle={project.title}
-                    projectOwner={project.owner.name}
+                    projectOwner={ownerName}
+                    projectRoles={project.roles}
+                    filledRoles={filledRoles}
                   >
                     <Button type="button" className="w-full">
                       Request to Join
                     </Button>
                   </JoinRequestDialog>
-                  <JoinRequestDialog
-                    projectId={project.project_id}
-                    projectTitle={project.title}
-                    projectOwner={project.owner.name}
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="w-full"
+                    disabled={!ownerUserId}
+                    onClick={() => {
+                      if (ownerUserId) {
+                        openChatHub({
+                          project_id: project.project_id,
+                          project_title: project.title,
+                          peer_user_id: ownerUserId,
+                          peer_name: ownerName,
+                          peer_avatar: ownerAvatar ?? null,
+                        })
+                      }
+                    }}
                   >
-                    <Button type="button" variant="outline" className="w-full">
-                      Contact Owner
-                    </Button>
-                  </JoinRequestDialog>
+                    Message owner
+                  </Button>
                 </div>
               </CardContent>
             </Card>
@@ -204,9 +250,9 @@ export function ProjectPage() {
               <CardContent>
                 <div className="flex items-center gap-3">
                   <Avatar className="h-12 w-12">
-                    <AvatarImage src={avatarUrl(project.owner.avatar_path)} alt={project.owner.name} />
+                    <AvatarImage src={ownerAvatar} alt={ownerName} />
                     <AvatarFallback className="bg-primary text-primary-foreground">
-                      {project.owner.name.slice(0, 2).toUpperCase()}
+                      {ownerName.slice(0, 2).toUpperCase()}
                     </AvatarFallback>
                   </Avatar>
                   <div>

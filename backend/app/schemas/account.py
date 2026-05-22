@@ -9,19 +9,12 @@ class AccountCreate(BaseModel):
     email : EmailStr
     password: str = Field(..., min_length=8)
     grade: Optional[str] = Field(None, max_length=10)
-    bio: Optional[str] = None
     roles : List[str] = []
     skills : List[str] = []
     technologies : List[str] = []
+    avatar: Optional[str] = None
 
 
-
-
-class AccountUpdate(BaseModel):
-    name: Optional[str] = Field(None, max_length=50)
-    email: Optional[EmailStr] = None
-    grade: Optional[str] = Field(None, max_length=9)
-    bio: Optional[str] = None
 
 
 class AccountRead(BaseModel):
@@ -31,13 +24,27 @@ class AccountRead(BaseModel):
     name: str
     email: str
     grade: str | None
-    bio: str | None = None
-    avatar_path: str | None = None
     roles: List[str] = []
     skills: List[str] = []
     technologies: List[str] = []
+    avatar: str | None = None
+    school: str | None = None
+    bio: str | None = None
 
     @field_validator("roles", "skills", "technologies", mode="before")
     @classmethod
     def array_columns_none_to_list(cls, v: Any) -> list:
         return v if v is not None else []
+
+
+class AccountUpdate(BaseModel):
+    """Partial-update payload for PATCH /user/me. Only fields the client sends are applied."""
+
+    name: Optional[str] = Field(default=None, max_length=50)
+    grade: Optional[str] = Field(default=None, max_length=10)
+    roles: Optional[List[str]] = None
+    skills: Optional[List[str]] = None
+    technologies: Optional[List[str]] = None
+    avatar: Optional[str] = None
+    school: Optional[str] = None
+    bio: Optional[str] = None
