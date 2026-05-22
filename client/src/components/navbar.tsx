@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react"
 import { Link, useLocation, useNavigate } from "react-router-dom"
-import { Search, User, LogOut, LogIn, X, Moon, Sun } from "lucide-react"
+import { Search, User, LogOut, LogIn, X, Moon, Sun, Users, Plus } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { NotificationPopover } from "@/components/notification-popover"
@@ -43,8 +43,8 @@ export function Navbar() {
   }, [])
 
   const navLinks = [
-    { href: "/manage-projects", label: "Manage Projects" },
-    { href: "/create-project", label: "Create New Project" },
+    { href: "/manage-projects", label: "Manage Projects", icon: Users },
+    { href: "/create-project", label: "Create New Project", icon: Plus },
   ]
 
   const handleSearch = (e: React.FormEvent) => {
@@ -79,10 +79,33 @@ export function Navbar() {
     <>
       <header className="sticky top-0 z-50 w-full border-b border-border bg-card">
         <div className="container mx-auto flex h-16 items-center justify-between px-4">
-          <div className="flex items-center gap-8">
-            <Link to="/" className="text-2xl font-bold text-foreground">
+          <div className="flex items-center gap-2 md:gap-8">
+            <Link to="/" className="text-xl font-bold text-foreground md:text-2xl">
               DevSync
             </Link>
+            <nav className="flex items-center gap-1 md:hidden">
+              {navLinks.map((link) => {
+                const Icon = link.icon
+                return (
+                  <Button
+                    key={link.href}
+                    asChild
+                    variant="ghost"
+                    size="icon"
+                    className={cn(
+                      "h-9 w-9",
+                      pathname === link.href
+                        ? "text-primary"
+                        : "text-muted-foreground hover:text-primary"
+                    )}
+                  >
+                    <Link to={link.href} aria-label={link.label}>
+                      <Icon className="h-4 w-4" />
+                    </Link>
+                  </Button>
+                )
+              })}
+            </nav>
             <nav className="hidden items-center gap-6 md:flex">
               {navLinks.map((link) => (
                 <Link
