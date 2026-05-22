@@ -9,6 +9,16 @@ import { Badge, type badgeVariants } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
+import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -19,6 +29,7 @@ import {
   API_BASE_URL,
   APPLICATION_SUBMITTED_EVENT,
   openChatHub,
+  readApiErrorMessage,
   TOKEN_STORAGE_KEY,
 } from '@/lib/api-config'
 import { OpenRolesBadges } from '@/components/open-roles-badges'
@@ -70,6 +81,9 @@ export function ManageProjectsPage() {
   const [joinRequests, setJoinRequests] = useState<JoinRequest[]>([])
   const [outgoingApplications, setOutgoingApplications] = useState<OutgoingApplication[]>([])
   const [requestActionKey, setRequestActionKey] = useState<string | null>(null)
+  const [projectToDelete, setProjectToDelete] = useState<Project | null>(null)
+  const [deletingProjectId, setDeletingProjectId] = useState<string | null>(null)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
 
   useEffect(() => {
     setMounted(true)
@@ -171,6 +185,37 @@ export function ManageProjectsPage() {
     }
   }
 
+  const handleDeleteProject = async () => {
+    if (!projectToDelete) return
+    const token = localStorage.getItem(TOKEN_STORAGE_KEY)
+    if (!token) return
+
+    setDeletingProjectId(projectToDelete.project_id)
+    setDeleteError(null)
+    try {
+      const res = await fetch(
+        `${API_BASE_URL}/project/${projectToDelete.project_id}`,
+        {
+          method: 'PATCH',
+          headers: { Authorization: `Bearer ${token}` },
+        },
+      )
+      if (!res.ok) {
+        const message = await readApiErrorMessage(res)
+        throw new Error(message)
+      }
+      setProjectToDelete(null)
+      void loadDashboard()
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : 'Failed to delete project'
+      setDeleteError(message)
+      console.error('Error deleting project:', error)
+    } finally {
+      setDeletingProjectId(null)
+    }
+  }
+
   return (
     <AuthGuard>
     <div className="min-h-screen bg-background">
@@ -250,7 +295,14 @@ export function ManageProjectsPage() {
                             Edit Project
                           </DropdownMenuItem>
                           <DropdownMenuSeparator />
-                          <DropdownMenuItem className="text-destructive focus:text-destructive">
+                          <DropdownMenuItem
+                            className="text-destructive focus:text-destructive"
+                            onSelect={(e) => {
+                              e.preventDefault()
+                              setDeleteError(null)
+                              setProjectToDelete(project)
+                            }}
+                          >
                             <Trash2 className="mr-2 h-4 w-4" />
                             Delete Project
                           </DropdownMenuItem>
@@ -419,6 +471,45 @@ export function ManageProjectsPage() {
             </div>
           </CardContent>
         </Card>
+
+        <AlertDialog
+          open={projectToDelete !== null}
+          onOpenChange={(open) => {
+            if (!open && deletingProjectId === null) {
+              setProjectToDelete(null)
+              setDeleteError(null)
+            }
+          }}
+        >
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Delete project?</AlertDialogTitle>
+              <AlertDialogDescription>
+                This will permanently remove &quot;{projectToDelete?.title}&quot; from
+                Dev-Sync. Join requests and applications for this project will no longer
+                appear. This action cannot be undone.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            {deleteError ? (
+              <p className="text-sm text-destructive">{deleteError}</p>
+            ) : null}
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={deletingProjectId !== null}>
+                Cancel
+              </AlertDialogCancel>
+              <AlertDialogAction
+                className="bg-destructive text-white hover:bg-destructive/90"
+                disabled={deletingProjectId !== null}
+                onClick={(e) => {
+                  e.preventDefault()
+                  void handleDeleteProject()
+                }}
+              >
+                {deletingProjectId !== null ? 'Deleting…' : 'Delete'}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </main>
     </div>
     </AuthGuard>
