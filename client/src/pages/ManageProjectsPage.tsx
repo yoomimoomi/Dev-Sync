@@ -1,9 +1,12 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { MessageSquare, Plus, Settings, Trash2, Eye, Users } from 'lucide-react'
+import { MessageSquare, Plus, Settings, Trash2, Eye, Users, Pencil } from 'lucide-react'
+import { EditProjectDialog } from '@/components/edit-project-dialog'
+import { ManageTeamDialog } from '@/components/manage-team-dialog'
 import { AuthGuard } from '@/components/auth-guard'
 import { Navbar } from '@/components/navbar'
 import { type Project } from '@/components/project-card'
+import { UserProfileLink } from '@/components/user-profile-link'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Badge, type badgeVariants } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -68,19 +71,14 @@ function applicationStatusBadge(status: string): StatusBadge {
   return { label: status.trim() || 'Unknown', variant: 'outline' }
 }
 
-function initials(name: string) {
-  const parts = name.trim().split(/\s+/).filter(Boolean)
-  const first = parts[0]?.[0] ?? ''
-  const second = parts.length > 1 ? parts[1]?.[0] ?? '' : parts[0]?.[1] ?? ''
-  return (first + second).toUpperCase() || '??'
-}
-
 export function ManageProjectsPage() {
   const [mounted, setMounted] = useState(false)
   const [projects, setProjects] = useState<Project[]>([])
   const [joinRequests, setJoinRequests] = useState<JoinRequest[]>([])
   const [outgoingApplications, setOutgoingApplications] = useState<OutgoingApplication[]>([])
   const [requestActionKey, setRequestActionKey] = useState<string | null>(null)
+  const [projectToEdit, setProjectToEdit] = useState<Project | null>(null)
+  const [projectToManageTeam, setProjectToManageTeam] = useState<Project | null>(null)
   const [projectToDelete, setProjectToDelete] = useState<Project | null>(null)
   const [deletingProjectId, setDeletingProjectId] = useState<string | null>(null)
   const [deleteError, setDeleteError] = useState<string | null>(null)
@@ -89,13 +87,13 @@ export function ManageProjectsPage() {
     setMounted(true)
   }, [])
 
-  const loadDashboard = useCallback(async () => {
+  const loadDashboard = useCallback(async (): Promise<Project[]> => {
     const token = localStorage.getItem(TOKEN_STORAGE_KEY)
     if (!token) {
       setProjects([])
       setJoinRequests([])
       setOutgoingApplications([])
-      return
+      return []
     }
 
     try {
@@ -106,8 +104,10 @@ export function ManageProjectsPage() {
         fetch(`${API_BASE_URL}/applications/me`, { headers }),
       ])
 
+      let projData: Project[] = []
       if (projRes.ok) {
-        setProjects((await projRes.json()) as Project[])
+        projData = (await projRes.json()) as Project[]
+        setProjects(projData)
       } else {
         setProjects([])
       }
@@ -123,8 +123,10 @@ export function ManageProjectsPage() {
       } else {
         setOutgoingApplications([])
       }
+      return projData
     } catch (error) {
       console.error('Error loading manage projects:', error)
+      return []
     }
   }, [])
 
@@ -286,12 +288,22 @@ export function ManageProjectsPage() {
                               View Project
                             </Link>
                           </DropdownMenuItem>
-                          <DropdownMenuItem>
+                          <DropdownMenuItem
+                            onSelect={(e) => {
+                              e.preventDefault()
+                              setProjectToManageTeam(project)
+                            }}
+                          >
                             <Users className="mr-2 h-4 w-4" />
                             Manage Team
                           </DropdownMenuItem>
-                          <DropdownMenuItem>
-                            <Settings className="mr-2 h-4 w-4" />
+                          <DropdownMenuItem
+                            onSelect={(e) => {
+                              e.preventDefault()
+                              setProjectToEdit(project)
+                            }}
+                          >
+                            <Pencil className="mr-2 h-4 w-4" />
                             Edit Project
                           </DropdownMenuItem>
                           <DropdownMenuSeparator />
@@ -368,12 +380,13 @@ export function ManageProjectsPage() {
                     className="flex items-center justify-between rounded-lg bg-muted/50 p-4"
                   >
                     <div className="flex items-center gap-3">
-                      <Avatar>
-                        <AvatarImage src={req.user_avatar || undefined} alt={req.user_name} />
-                        <AvatarFallback>{initials(req.user_name)}</AvatarFallback>
-                      </Avatar>
+                      <UserProfileLink
+                        userId={req.user_id}
+                        name={req.user_name}
+                        avatar={req.user_avatar}
+                        size="md"
+                      />
                       <div>
-                        <p className="text-sm font-medium">{req.user_name}</p>
                         <p className="text-xs text-muted-foreground">
                           Wants to join &quot;{req.project_title}&quot;
                           {req.role ? (
@@ -471,6 +484,34 @@ export function ManageProjectsPage() {
             </div>
           </CardContent>
         </Card>
+
+        <EditProjectDialog
+          project={projectToEdit}
+          open={projectToEdit !== null}
+          onOpenChange={(open) => {
+            if (!open) setProjectToEdit(null)
+          }}
+          onSaved={() => {
+            setProjectToEdit(null)
+            void loadDashboard()
+          }}
+        />
+
+        <ManageTeamDialog
+          project={projectToManageTeam}
+          open={projectToManageTeam !== null}
+          onOpenChange={(open) => {
+            if (!open) setProjectToManageTeam(null)
+          }}
+          onUpdated={() => {
+            void loadDashboard().then((list) => {
+              setProjectToManageTeam((prev) => {
+                if (!prev) return null
+                return list.find((p) => p.project_id === prev.project_id) ?? prev
+              })
+            })
+          }}
+        />
 
         <AlertDialog
           open={projectToDelete !== null}

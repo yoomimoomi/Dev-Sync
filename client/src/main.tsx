@@ -17,6 +17,7 @@ import { CreateProjectPage } from './pages/CreateProjectPage'
 import { HomePage } from './pages/HomePage'
 import { ManageProjectsPage } from './pages/ManageProjectsPage'
 import { ProfilePage } from './pages/ProfilePage'
+import { UserProfilePage } from './pages/UserProfilePage'
 import { ProjectPage } from './pages/ProjectPage'
 
 function RootLayout() {
@@ -36,6 +37,7 @@ const router = createBrowserRouter([
       { path: '/create-project', element: <CreateProjectPage /> },
       { path: '/manage-projects', element: <ManageProjectsPage /> },
       { path: '/profile', element: <ProfilePage /> },
+      { path: '/profile/:userId', element: <UserProfilePage /> },
       { path: '/project/:id', element: <ProjectPage /> },
       { path: '*', element: <Navigate to="/" replace /> },
     ],

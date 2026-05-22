@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { ArrowLeft, Users, Calendar } from 'lucide-react'
 import { Navbar } from '@/components/navbar'
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
+import { UserProfileLink } from '@/components/user-profile-link'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { type Project } from '@/components/project-card'
@@ -79,6 +79,7 @@ export function ProjectPage() {
       id: c.comment_id,
       projectId: c.project_id,
       author: {
+        userId: c.user_id,
         name: c.user?.name ?? 'Unknown User',
         avatar: c.user?.avatar ?? undefined,
       },
@@ -151,35 +152,36 @@ export function ProjectPage() {
               </CardHeader>
               <CardContent>
                 <div className="flex flex-wrap gap-4">
-                  <div className="flex items-center gap-3">
-                    <Avatar>
-                      <AvatarImage src={ownerAvatar} alt={ownerName} />
-                      <AvatarFallback className="bg-primary text-primary-foreground">
-                        {ownerName.slice(0, 2).toUpperCase()}
-                      </AvatarFallback>
-                    </Avatar>
+                  {ownerUserId ? (
+                    <div className="flex flex-col gap-0.5">
+                      <UserProfileLink
+                        userId={ownerUserId}
+                        name={ownerName}
+                        avatar={ownerAvatar}
+                        size="md"
+                      />
+                      <p className="pl-11 text-xs text-muted-foreground">Project Lead</p>
+                    </div>
+                  ) : (
                     <div>
                       <p className="text-sm font-medium">{ownerName}</p>
                       <p className="text-xs text-muted-foreground">Project Lead</p>
                     </div>
-                  </div>
+                  )}
                   {acceptedMembers.map((member) => {
                     const display = member.name?.trim() || member.email?.trim() || 'Member'
                     const memberAvatar = member.avatar || undefined
                     return (
-                      <div key={member.user_id} className="flex items-center gap-3">
-                        <Avatar>
-                          <AvatarImage src={memberAvatar} alt={display} />
-                          <AvatarFallback className="bg-muted text-muted-foreground">
-                            {display.slice(0, 2).toUpperCase()}
-                          </AvatarFallback>
-                        </Avatar>
-                        <div>
-                          <p className="text-sm font-medium">{display}</p>
-                          <p className="text-xs text-muted-foreground">
-                            {member.project_role?.trim() || 'Team member'}
-                          </p>
-                        </div>
+                      <div key={member.user_id} className="flex flex-col gap-0.5">
+                        <UserProfileLink
+                          userId={member.user_id}
+                          name={display}
+                          avatar={memberAvatar}
+                          size="md"
+                        />
+                        <p className="pl-11 text-xs text-muted-foreground">
+                          {member.project_role?.trim() || 'Team member'}
+                        </p>
                       </div>
                     )
                   })}
@@ -246,17 +248,17 @@ export function ProjectPage() {
                 <CardTitle className="text-base">Project Owner</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="flex items-center gap-3">
-                  <Avatar className="h-12 w-12">
-                    <AvatarImage src={ownerAvatar} alt={ownerName} />
-                    <AvatarFallback className="bg-primary text-primary-foreground">
-                      {ownerName.slice(0, 2).toUpperCase()}
-                    </AvatarFallback>
-                  </Avatar>
-                  <div>
-                    <p className="font-medium">{ownerName}</p>
-                  </div>
-                </div>
+                {ownerUserId ? (
+                  <UserProfileLink
+                    userId={ownerUserId}
+                    name={ownerName}
+                    avatar={ownerAvatar}
+                    size="lg"
+                    nameClassName="text-base"
+                  />
+                ) : (
+                  <p className="font-medium">{ownerName}</p>
+                )}
               </CardContent>
             </Card>
           </div>

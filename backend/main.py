@@ -28,7 +28,7 @@ from app.routes import router
 from app.schemas.account import AccountCreate, AccountRead, AccountUpdate
 from app.schemas.application import ApplicationCreate, ApplicationRead, ApplicantView, ProjectOwnerView
 from app.schemas.comment import CommentCreate, CommentRead
-from app.schemas.projects import ProjectCreate, ProjectRead
+from app.schemas.projects import ProjectCreate, ProjectRead, ProjectUpdate
 from app.models.notifcation import Notification
 from app.schemas.message import ConversationRead, MarkThreadReadResult, MessageRead
 from app.schemas.notification import NotificationRead, NotificationsMarkReadBody
@@ -460,6 +460,27 @@ async def get_projects_by_user_id(user_id: str, db: Session = Depends(get_db)):
     return projects
 
 
+@app.get("/projects/user/{user_id}/joined", response_model=list[ProjectRead])
+async def get_joined_projects_by_user_id(user_id: str, db: Session = Depends(get_db)):
+    """Projects the user collaborates on (accepted join), excluding ones they own."""
+    projects = (
+        db.query(Project)
+        .join(Application, Application.project_id == Project.project_id)
+        .filter(Application.user_id == user_id)
+        .filter(Application.status == "Accepted")
+        .filter(Project.is_deleted == False)
+        .filter(Project.user_id != user_id)
+        .options(
+            selectinload(Project.owner),
+            selectinload(Project.applications).selectinload(Application.user),
+            selectinload(Project.comments).selectinload(Comment.user),
+        )
+        .distinct()
+        .all()
+    )
+    return projects
+
+
 @app.post("/project", response_model=ProjectRead)
 async def create_project(project_in: ProjectCreate, current_user: Annotated[Account, Depends(get_current_user)], db: Session = Depends(get_db)):
     new_project = Project(
@@ -478,6 +499,51 @@ async def create_project(project_in: ProjectCreate, current_user: Annotated[Acco
     
     db.refresh(new_project)
     return new_project
+
+
+@app.put("/project/{project_id}", response_model=ProjectRead)
+async def update_project(
+    project_id: str,
+    project_in: ProjectUpdate,
+    current_user: Annotated[Account, Depends(get_current_user)],
+    db: Session = Depends(get_db),
+):
+    project = (
+        db.query(Project)
+        .filter(Project.project_id == project_id)
+        .filter(Project.is_deleted == False)
+        .options(
+            selectinload(Project.owner),
+            selectinload(Project.applications).selectinload(Application.user),
+            selectinload(Project.comments).selectinload(Comment.user),
+        )
+        .first()
+    )
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    if project.user_id != current_user.user_id:
+        raise HTTPException(status_code=403, detail="You are not the owner of this project")
+
+    new_roles = [r.strip() for r in (project_in.roles or []) if r and r.strip()]
+    if not new_roles:
+        raise HTTPException(status_code=400, detail="Add at least one open role")
+
+    missing_filled = [r for r in project.filled_roles if r not in new_roles]
+    if missing_filled:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Cannot remove filled role(s): {', '.join(missing_filled)}",
+        )
+
+    project.title = project_in.title.strip()
+    project.description = project_in.description.strip()
+    project.grade = project_in.grade.strip()
+    project.roles = new_roles
+    project.skills = project_in.skills or []
+    project.technologies = project_in.technologies or []
+    db.commit()
+    db.refresh(project)
+    return project
 
 
 @app.patch("/project/{project_id}", status_code=204)

@@ -18,6 +18,7 @@ import {
   readApiErrorMessage,
   TOKEN_STORAGE_KEY,
 } from '@/lib/api-config'
+import { UserProfileLink } from '@/components/user-profile-link'
 import { useChatRealtime } from '@/lib/chat-realtime-context'
 import { useAuth } from '@/lib/auth-context'
 import type { ApplicationChatRow } from '@/components/application-chat-dialog'
@@ -461,20 +462,17 @@ export function MessagingHub() {
                 >
                   <ArrowLeft className="h-4 w-4" />
                 </button>
-                {activeConv.peer_avatar ? (
-                  <img
-                    src={activeConv.peer_avatar}
-                    alt={activeConv.peer_name}
-                    className="h-8 w-8 shrink-0 rounded-full object-cover"
-                  />
-                ) : (
-                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-bold text-primary">
-                    {initials(activeConv.peer_name)}
-                  </div>
-                )}
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-semibold leading-tight">{activeConv.peer_name}</p>
-                  <p className="truncate text-[11px] leading-tight text-muted-foreground">{activeConv.project_title}</p>
+                  <UserProfileLink
+                    userId={activeConv.peer_user_id}
+                    name={activeConv.peer_name}
+                    avatar={activeConv.peer_avatar}
+                    size="md"
+                    nameClassName="truncate text-sm font-semibold leading-tight"
+                  />
+                  <p className="truncate pl-11 text-[11px] leading-tight text-muted-foreground">
+                    {activeConv.project_title}
+                  </p>
                 </div>
               </div>
 

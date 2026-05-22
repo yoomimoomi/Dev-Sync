@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
 import { Navbar } from '@/components/navbar'
-import { ProjectCard, type Project } from '@/components/project-card'
+import { ProfileProjectsPanel } from '@/components/profile-projects-panel'
+import type { Project } from '@/components/project-card'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import {
@@ -72,7 +72,8 @@ async function extractErrorMessage(response: Response): Promise<string> {
 }
 
 export function ProfilePage() {
-  const [projects, setProjects] = useState<Project[]>([])
+  const [createdProjects, setCreatedProjects] = useState<Project[]>([])
+  const [joinedProjects, setJoinedProjects] = useState<Project[]>([])
   const [profile, setProfile] = useState<Profile | null>(null)
 
   const [isEditOpen, setIsEditOpen] = useState(false)
@@ -93,23 +94,29 @@ export function ProfilePage() {
         const token = localStorage.getItem(TOKEN_STORAGE_KEY)
         if (!token) return
 
-        const [profileResponse, projectsResponse] = await Promise.all([
-          fetch(`${API_BASE_URL}/user/me`, {
-            headers: { Authorization: `Bearer ${token}` },
-          }),
+        const profileResponse = await fetch(`${API_BASE_URL}/user/me`, {
+          headers: { Authorization: `Bearer ${token}` },
+        })
+        if (!profileResponse.ok) throw new Error('Failed to fetch profile')
+
+        const profileData: Profile = await profileResponse.json()
+
+        const [createdResponse, joinedResponse] = await Promise.all([
           fetch(`${API_BASE_URL}/projects/me`, {
             headers: { Authorization: `Bearer ${token}` },
           }),
+          fetch(`${API_BASE_URL}/projects/user/${profileData.user_id}/joined`),
         ])
 
-        if (!profileResponse.ok) throw new Error('Failed to fetch profile')
-        if (!projectsResponse.ok) throw new Error('Failed to fetch projects')
+        if (!createdResponse.ok) throw new Error('Failed to fetch created projects')
+        if (!joinedResponse.ok) throw new Error('Failed to fetch joined projects')
 
-        const profileData: Profile = await profileResponse.json()
-        const projectData: Project[] = await projectsResponse.json()
+        const createdData: Project[] = await createdResponse.json()
+        const joinedData: Project[] = await joinedResponse.json()
 
         setProfile(profileData)
-        setProjects(projectData)
+        setCreatedProjects(createdData)
+        setJoinedProjects(joinedData)
       } catch (error) {
         console.error('Error fetching profile page data:', error)
       }
@@ -261,12 +268,12 @@ export function ProfilePage() {
               <CardContent>
                 <div className="grid grid-cols-3 gap-4 text-center">
                   <div>
-                    <p className="text-2xl font-bold text-primary">{projects.length}</p>
+                    <p className="text-2xl font-bold text-primary">{createdProjects.length}</p>
                     <p className="text-xs text-muted-foreground">Created</p>
                   </div>
                   <div>
-                    <p className="text-2xl font-bold text-primary">{profile?.roles.length ?? 0}</p>
-                    <p className="text-xs text-muted-foreground">Roles</p>
+                    <p className="text-2xl font-bold text-primary">{joinedProjects.length}</p>
+                    <p className="text-xs text-muted-foreground">Joined</p>
                   </div>
                   <div>
                     <p className="text-2xl font-bold text-primary">{profileTags.length}</p>
@@ -296,27 +303,17 @@ export function ProfilePage() {
           </div>
 
           <div className="lg:col-span-2">
-            <div className="mb-6">
-              <h2 className="text-xl font-bold text-foreground">My Projects</h2>
-              <p className="text-sm text-muted-foreground">Projects you&apos;ve created and are collaborating on</p>
-            </div>
-
-            <div className="space-y-4">
-                {projects.map((project) => (
-                  <ProjectCard key={project.project_id} project={project} />
-                ))}
-            </div>
-
-            {projects.length === 0 && (
-              <Card>
-                <CardContent className="py-12 text-center">
-                  <p className="text-muted-foreground">You haven&apos;t created any projects yet.</p>
-                  <Button className="mt-4" asChild>
-                    <Link to="/create-project">Create Your First Project</Link>
-                  </Button>
-                </CardContent>
-              </Card>
-            )}
+            <ProfileProjectsPanel
+              createdProjects={createdProjects}
+              joinedProjects={joinedProjects}
+              createdHeading="Created Projects"
+              joinedHeading="Collaborating On"
+              createdDescription="Projects you started"
+              joinedDescription="Projects you joined as a team member"
+              emptyCreatedMessage="You haven't created any projects yet."
+              emptyJoinedMessage="You aren't collaborating on any projects yet."
+              showCreateButton
+            />
           </div>
         </div>
       </main>

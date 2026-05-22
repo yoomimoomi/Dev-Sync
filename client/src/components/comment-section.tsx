@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react"
 import { MessageCircle, Reply, Send } from "lucide-react"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { UserProfileLink } from "@/components/user-profile-link"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Textarea } from "@/components/ui/textarea"
@@ -51,18 +52,31 @@ function CommentItem({
     }
   }
 
+  const authorUserId = comment.author.userId
+
   return (
     <div className="space-y-3">
       <div className="flex gap-3">
-        <Avatar className="h-8 w-8 shrink-0">
-          <AvatarImage src={comment.author.avatar || undefined} alt={comment.author.name} />
-          <AvatarFallback className="bg-secondary text-secondary-foreground text-xs">
-            {comment.author.name.slice(0, 2).toUpperCase()}
-          </AvatarFallback>
-        </Avatar>
         <div className="flex-1 space-y-1">
           <div className="flex items-center gap-2">
-            <span className="font-medium text-sm">{comment.author.name}</span>
+            {authorUserId ? (
+              <UserProfileLink
+                userId={authorUserId}
+                name={comment.author.name}
+                avatar={comment.author.avatar}
+                size="md"
+              />
+            ) : (
+              <>
+                <Avatar className="h-8 w-8 shrink-0">
+                  <AvatarImage src={comment.author.avatar || undefined} alt={comment.author.name} />
+                  <AvatarFallback className="bg-secondary text-secondary-foreground text-xs">
+                    {comment.author.name.slice(0, 2).toUpperCase()}
+                  </AvatarFallback>
+                </Avatar>
+                <span className="font-medium text-sm">{comment.author.name}</span>
+              </>
+            )}
             <span className="text-xs text-muted-foreground">{formatTimeAgo(comment.createdAt)}</span>
           </div>
           <p className="text-sm text-foreground">{comment.content}</p>
@@ -101,23 +115,37 @@ function CommentItem({
 
       {comment.replies && comment.replies.length > 0 && (
         <div className="ml-11 space-y-3 border-l-2 border-border pl-4">
-          {comment.replies.map((reply) => (
-            <div key={reply.id} className="flex gap-3">
-              <Avatar className="h-6 w-6 shrink-0">
-                <AvatarImage src={reply.author.avatar || undefined} alt={reply.author.name} />
-                <AvatarFallback className="bg-secondary text-secondary-foreground text-xs">
-                  {reply.author.name.slice(0, 2).toUpperCase()}
-                </AvatarFallback>
-              </Avatar>
-              <div className="flex-1 space-y-1">
-                <div className="flex items-center gap-2">
-                  <span className="font-medium text-sm">{reply.author.name}</span>
-                  <span className="text-xs text-muted-foreground">{formatTimeAgo(reply.createdAt)}</span>
+          {comment.replies.map((reply) => {
+            const replyUserId = reply.author.userId
+            return (
+              <div key={reply.id} className="flex gap-3">
+                <div className="flex-1 space-y-1">
+                  <div className="flex items-center gap-2">
+                    {replyUserId ? (
+                      <UserProfileLink
+                        userId={replyUserId}
+                        name={reply.author.name}
+                        avatar={reply.author.avatar}
+                        size="sm"
+                      />
+                    ) : (
+                      <>
+                        <Avatar className="h-6 w-6 shrink-0">
+                          <AvatarImage src={reply.author.avatar || undefined} alt={reply.author.name} />
+                          <AvatarFallback className="bg-secondary text-secondary-foreground text-xs">
+                            {reply.author.name.slice(0, 2).toUpperCase()}
+                          </AvatarFallback>
+                        </Avatar>
+                        <span className="font-medium text-sm">{reply.author.name}</span>
+                      </>
+                    )}
+                    <span className="text-xs text-muted-foreground">{formatTimeAgo(reply.createdAt)}</span>
+                  </div>
+                  <p className="text-sm text-foreground">{reply.content}</p>
                 </div>
-                <p className="text-sm text-foreground">{reply.content}</p>
               </div>
-            </div>
-          ))}
+            )
+          })}
         </div>
       )}
     </div>
@@ -170,6 +198,7 @@ export function CommentSection({ projectId, initialComments }: CommentSectionPro
         id: savedComment.comment_id,
         projectId: savedComment.project_id,
         author: {
+          userId: savedComment.user_id ?? user.id,
           name: savedComment.user?.name ?? user.name,
           avatar: savedComment.user?.avatar ?? user.avatar ?? undefined,
         },
@@ -218,6 +247,7 @@ export function CommentSection({ projectId, initialComments }: CommentSectionPro
         id: saved.comment_id,
         projectId: saved.project_id,
         author: {
+          userId: saved.user_id ?? user.id,
           name: saved.user?.name ?? user.name,
           avatar: saved.user?.avatar ?? user.avatar ?? undefined,
         },

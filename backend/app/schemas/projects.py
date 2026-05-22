@@ -19,6 +19,16 @@ class ProjectCreate(BaseModel):
     skills: list[str] = []
     technologies: list[str] = []
 
+
+class ProjectUpdate(BaseModel):
+    title: str
+    description: str
+    grade: str
+    roles: list[str] = []
+    skills: list[str] = []
+    technologies: list[str] = []
+
+
 class ProjectBase(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
