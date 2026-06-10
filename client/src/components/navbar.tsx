@@ -1,9 +1,10 @@
 import { useState, useEffect } from "react"
 import { Link, useLocation, useNavigate } from "react-router-dom"
-import { Search, User, LogOut, LogIn, X, Moon, Sun } from "lucide-react"
+import { Search, User, LogOut, LogIn, X, Moon, Sun, Menu, Plus, Users } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { NotificationPopover } from "@/components/notification-popover"
+import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -37,14 +38,15 @@ export function Navbar() {
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [loginError, setLoginError] = useState("")
+  const [sidebarOpen, setSidebarOpen] = useState(false)
 
   useEffect(() => {
     setMounted(true)
   }, [])
 
-  const navLinks = [
-    { href: "/manage-projects", label: "Manage Projects" },
-    { href: "/create-project", label: "Create New Project" },
+  const sidebarLinks = [
+    { href: "/manage-projects", label: "Manage Projects", icon: Users },
+    { href: "/create-project", label: "Create New Project", icon: Plus },
   ]
 
   const handleSearch = (e: React.FormEvent) => {
@@ -72,36 +74,55 @@ export function Navbar() {
 
   const handleLogout = () => {
     logout()
+    setSidebarOpen(false)
     navigate("/")
   }
 
   return (
     <>
-      <header className="sticky top-0 z-50 w-full border-b border-border bg-card">
+      <header className="sticky top-0 z-[60] w-full border-b border-border bg-card">
         <div className="container mx-auto flex h-16 items-center justify-between px-4">
-          <div className="flex items-center gap-8">
+          <div className="flex items-center gap-3">
+            <Sheet open={sidebarOpen} onOpenChange={setSidebarOpen}>
+              <SheetTrigger asChild>
+                <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-foreground">
+                  <Menu className="h-5 w-5" />
+                  <span className="sr-only">Open navigation menu</span>
+                </Button>
+              </SheetTrigger>
+              <SheetContent side="left" className="top-16 h-[calc(100vh-4rem)] w-72 [&>button]:hidden">
+                <nav className="mt-4 flex flex-col gap-2">
+                  {sidebarLinks.map((link) => {
+                    const Icon = link.icon
+                    return (
+                      <Link
+                        key={link.href}
+                        to={link.href}
+                        onClick={() => setSidebarOpen(false)}
+                        className={cn(
+                          "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors hover:bg-muted",
+                          pathname === link.href ? "text-primary" : "text-foreground"
+                        )}
+                      >
+                        <Icon className="h-4 w-4" />
+                        <span>{link.label}</span>
+                      </Link>
+                    )
+                  })}
+                </nav>
+              </SheetContent>
+            </Sheet>
             <Link to="/" className="text-2xl font-bold text-foreground">
               DevSync
             </Link>
-            <nav className="hidden items-center gap-6 md:flex">
-              {navLinks.map((link) => (
-                <Link
-                  key={link.href}
-                  to={link.href}
-                  className={cn(
-                    "text-sm font-medium transition-colors hover:text-primary",
-                    pathname === link.href
-                      ? "text-primary"
-                      : "text-muted-foreground"
-                  )}
-                >
-                  {link.label}
-                </Link>
-              ))}
-            </nav>
           </div>
 
           <div className="flex items-center gap-2">
+            <Button asChild variant="ghost" size="icon" className="text-muted-foreground hover:text-foreground">
+              <Link to="/create-project" aria-label="Create new project">
+                <Plus className="h-5 w-5" />
+              </Link>
+            </Button>
             {showSearch ? (
               <form onSubmit={handleSearch} className="flex items-center gap-2">
                 <Input
