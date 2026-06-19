@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react"
 import { Link, useLocation, useNavigate } from "react-router-dom"
-import { Search, User, LogOut, LogIn, X, Moon, Sun, Menu, Plus, Users } from "lucide-react"
+import { Search, User, LogOut, LogIn, X, Moon, Sun, Menu, Plus, Users, House, Flame, Sparkles, ChevronDown, FolderOpen } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { NotificationPopover } from "@/components/notification-popover"
@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/dialog"
 import { cn } from "@/lib/utils"
 import { useAuth } from "@/lib/auth-context"
+import { API_BASE_URL, TOKEN_STORAGE_KEY } from "@/lib/api-config"
 import { useSearch } from "@/lib/search-context"
 import { useTheme } from "@/lib/theme-context"
 
@@ -39,15 +40,54 @@ export function Navbar() {
   const [password, setPassword] = useState("")
   const [loginError, setLoginError] = useState("")
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [projectsOpen, setProjectsOpen] = useState(false)
+  const [myProjects, setMyProjects] = useState<Array<{ project_id: string; title: string }>>([])
 
   useEffect(() => {
     setMounted(true)
   }, [])
 
   const sidebarLinks = [
+    { href: "/", label: "Home", icon: House },
+    { href: "/popular", label: "Popular", icon: Flame },
+    { href: "/showcase", label: "Showcase", icon: Sparkles },
     { href: "/manage-projects", label: "Manage Projects", icon: Users },
     { href: "/create-project", label: "Create New Project", icon: Plus },
   ]
+
+  useEffect(() => {
+    if (!sidebarOpen || !isAuthenticated) return
+    const token = localStorage.getItem(TOKEN_STORAGE_KEY)
+    if (!token) {
+      setMyProjects([])
+      return
+    }
+
+    const loadMyProjects = async () => {
+      try {
+        const res = await fetch(`${API_BASE_URL}/projects/me`, {
+          headers: { Authorization: `Bearer ${token}` },
+        })
+        if (!res.ok) {
+          setMyProjects([])
+          return
+        }
+        const data = (await res.json()) as Array<{ project_id?: string; title?: string }>
+        setMyProjects(
+          data
+            .filter((p) => typeof p.project_id === "string" && p.project_id.trim())
+            .map((p) => ({
+              project_id: (p.project_id ?? "").trim(),
+              title: (p.title ?? "").trim() || "Untitled project",
+            })),
+        )
+      } catch {
+        setMyProjects([])
+      }
+    }
+
+    void loadMyProjects()
+  }, [sidebarOpen, isAuthenticated])
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault()
@@ -90,7 +130,7 @@ export function Navbar() {
                   <span className="sr-only">Open navigation menu</span>
                 </Button>
               </SheetTrigger>
-              <SheetContent side="left" className="top-16 h-[calc(100vh-4rem)] w-72 [&>button]:hidden">
+              <SheetContent side="left" className="top-16 h-[calc(100vh-7rem)] w-64 [&>button]:hidden">
                 <nav className="mt-4 flex flex-col gap-2">
                   {sidebarLinks.map((link) => {
                     const Icon = link.icon
@@ -109,6 +149,46 @@ export function Navbar() {
                       </Link>
                     )
                   })}
+                  {isAuthenticated && (
+                    <div className="mt-2 rounded-md border border-border/70">
+                      <button
+                        type="button"
+                        onClick={() => setProjectsOpen((prev) => !prev)}
+                        className="flex w-full items-center justify-between rounded-md px-3 py-2 text-sm font-medium text-foreground transition-colors hover:bg-muted"
+                      >
+                        <span className="flex items-center gap-3">
+                          <FolderOpen className="h-4 w-4" />
+                          Projects
+                        </span>
+                        <ChevronDown
+                          className={cn(
+                            "h-4 w-4 transition-transform",
+                            projectsOpen && "rotate-180",
+                          )}
+                        />
+                      </button>
+                      {projectsOpen && (
+                        <div className="max-h-44 space-y-1 overflow-y-auto border-t border-border/70 px-2 py-2">
+                          {myProjects.length === 0 ? (
+                            <p className="px-2 py-1 text-xs text-muted-foreground">
+                              No projects yet.
+                            </p>
+                          ) : (
+                            myProjects.map((project) => (
+                              <Link
+                                key={project.project_id}
+                                to={`/project/${project.project_id}`}
+                                onClick={() => setSidebarOpen(false)}
+                                className="block rounded-md px-2 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                              >
+                                {project.title}
+                              </Link>
+                            ))
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </nav>
               </SheetContent>
             </Sheet>
