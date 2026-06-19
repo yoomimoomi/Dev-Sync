@@ -81,7 +81,7 @@ export function Navbar() {
   return (
     <>
       <header className="sticky top-0 z-[60] w-full border-b border-border bg-card">
-        <div className="container mx-auto flex h-16 items-center justify-between px-4">
+        <div className="w-full flex h-16 items-center justify-between px-4 md:px-6">
           <div className="flex items-center gap-3">
             <Sheet open={sidebarOpen} onOpenChange={setSidebarOpen}>
               <SheetTrigger asChild>
