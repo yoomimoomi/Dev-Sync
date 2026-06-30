@@ -16,8 +16,10 @@ import { MessagingHub } from './components/messaging-hub'
 import { CreateProjectPage } from './pages/CreateProjectPage'
 import { HomePage } from './pages/HomePage'
 import { ManageProjectsPage } from './pages/ManageProjectsPage'
+import { PopularPage } from './pages/PopularPage'
 import { ProfilePage } from './pages/ProfilePage'
 import { ProjectPage } from './pages/ProjectPage'
+import { ShowcasePage } from './pages/ShowcasePage'
 
 function RootLayout() {
   return (
@@ -33,6 +35,8 @@ const router = createBrowserRouter([
     element: <RootLayout />,
     children: [
       { path: '/', element: <HomePage /> },
+      { path: '/popular', element: <PopularPage /> },
+      { path: '/showcase', element: <ShowcasePage /> },
       { path: '/create-project', element: <CreateProjectPage /> },
       { path: '/manage-projects', element: <ManageProjectsPage /> },
       { path: '/profile', element: <ProfilePage /> },
