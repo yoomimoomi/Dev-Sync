@@ -53,6 +53,7 @@ export function ProjectCard({ project }: ProjectCardProps) {
   const tags = [...project.roles, ...project.skills, ...project.technologies]
   const ownerName = project.owner?.name?.trim() || 'Unknown'
   const ownerAvatar = project.owner?.avatar || undefined
+  const ownerUserId = project.owner?.user_id
 
   return (
     <Link to={`/project/${project.project_id}`} className="block">
@@ -70,13 +71,14 @@ export function ProjectCard({ project }: ProjectCardProps) {
                 <button
                   type="button"
                   className="font-medium text-foreground hover:text-primary hover:underline"
+                  disabled={!ownerUserId}
                   onClick={(e) => {
                     e.preventDefault()
                     e.stopPropagation()
-                    navigate(`/users/${project.user_id}`)
+                    if (ownerUserId) navigate(`/users/${ownerUserId}`)
                   }}
                 >
-                  {project.owner.name}
+                  {ownerName}
                 </button>
                 <span>{formatTimeAgo(project.created_at)}</span>
               </div>

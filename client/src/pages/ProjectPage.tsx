@@ -159,9 +159,16 @@ export function ProjectPage() {
                       </AvatarFallback>
                     </Avatar>
                     <div>
-                      <Link to={`/users/${project.user_id}`} className="text-sm font-medium hover:text-primary hover:underline">
-                        {project.owner.name}
-                      </Link>
+                      {ownerUserId ? (
+                        <Link
+                          to={`/users/${ownerUserId}`}
+                          className="text-sm font-medium hover:text-primary hover:underline"
+                        >
+                          {ownerName}
+                        </Link>
+                      ) : (
+                        <span className="text-sm font-medium">{ownerName}</span>
+                      )}
                       <p className="text-xs text-muted-foreground">Project Lead</p>
                     </div>
                   </div>
@@ -256,9 +263,16 @@ export function ProjectPage() {
                     </AvatarFallback>
                   </Avatar>
                   <div>
-                    <Link to={`/users/${project.user_id}`} className="font-medium hover:text-primary hover:underline">
-                      {project.owner.name}
-                    </Link>
+                    {ownerUserId ? (
+                      <Link
+                        to={`/users/${ownerUserId}`}
+                        className="font-medium hover:text-primary hover:underline"
+                      >
+                        {ownerName}
+                      </Link>
+                    ) : (
+                      <span className="font-medium">{ownerName}</span>
+                    )}
                   </div>
                 </div>
               </CardContent>

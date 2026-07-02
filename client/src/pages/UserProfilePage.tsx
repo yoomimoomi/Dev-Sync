@@ -4,7 +4,7 @@ import { Navbar } from '@/components/navbar'
 import { ProjectCard, type Project } from '@/components/project-card'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { avatarUrl, API_BASE_URL } from '@/lib/api-config'
+import { API_BASE_URL } from '@/lib/api-config'
 
 type PublicProfile = {
   user: {
@@ -16,7 +16,7 @@ type PublicProfile = {
     roles: string[]
     skills: string[]
     technologies: string[]
-    avatar_path?: string | null
+    avatar?: string | null
   }
   stats: {
     created_projects: number
@@ -101,9 +101,9 @@ export function UserProfilePage() {
               <CardContent className="pt-6">
                 <div className="flex flex-col items-center text-center">
                   <div className="relative flex h-24 w-24 items-center justify-center overflow-hidden rounded-full bg-primary/10 text-4xl font-bold text-primary">
-                    {profile.user.avatar_path ? (
+                    {profile.user.avatar ? (
                       <img
-                        src={avatarUrl(profile.user.avatar_path)}
+                        src={profile.user.avatar}
                         alt={profile.user.name}
                         className="h-full w-full object-cover"
                       />

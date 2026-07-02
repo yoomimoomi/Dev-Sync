@@ -248,6 +248,7 @@ export function ManageProjectsPage() {
             {projects.map((project) => {
               const ownerName = project.owner?.name?.trim() || 'Unknown'
               const ownerAvatar = project.owner?.avatar || undefined
+              const ownerUserId = project.owner?.user_id
               return (
               <Card key={project.project_id} className="transition-all hover:shadow-md">
                 <CardHeader className="pb-3">
@@ -270,8 +271,14 @@ export function ManageProjectsPage() {
                         </CardTitle>
                         <p className="text-sm text-muted-foreground">
                           by{" "}
-                          <Link to={`/users/${project.user_id}`} className="hover:text-primary hover:underline">
-                            {project.owner.name}
+                          <Link
+                            to={ownerUserId ? `/users/${ownerUserId}` : '#'}
+                            className="hover:text-primary hover:underline"
+                            onClick={(e) => {
+                              if (!ownerUserId) e.preventDefault()
+                            }}
+                          >
+                            {ownerName}
                           </Link>{" "}
                           <p className="text-sm text-muted-foreground">Created {formatTimeAgo(project.created_at)}</p>
                         </p>
