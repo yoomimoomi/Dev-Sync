@@ -1,9 +1,10 @@
 import { useState, useEffect } from "react"
 import { Link, useLocation, useNavigate } from "react-router-dom"
-import { Search, User, LogOut, LogIn, X, Moon, Sun, Users, Plus } from "lucide-react"
+import { Search, User, LogOut, LogIn, X, Moon, Sun, Menu, Plus, Users, House, Flame, Sparkles, ChevronDown, FolderOpen } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { NotificationPopover } from "@/components/notification-popover"
+import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -20,6 +21,7 @@ import {
 } from "@/components/ui/dialog"
 import { cn } from "@/lib/utils"
 import { useAuth } from "@/lib/auth-context"
+import { API_BASE_URL, TOKEN_STORAGE_KEY } from "@/lib/api-config"
 import { useSearch } from "@/lib/search-context"
 import { useTheme } from "@/lib/theme-context"
 
@@ -37,15 +39,55 @@ export function Navbar() {
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [loginError, setLoginError] = useState("")
+  const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [projectsOpen, setProjectsOpen] = useState(false)
+  const [myProjects, setMyProjects] = useState<Array<{ project_id: string; title: string }>>([])
 
   useEffect(() => {
     setMounted(true)
   }, [])
 
-  const navLinks = [
+  const sidebarLinks = [
+    { href: "/", label: "Home", icon: House },
+    { href: "/popular", label: "Popular", icon: Flame },
+    { href: "/showcase", label: "Showcase", icon: Sparkles },
     { href: "/manage-projects", label: "Manage Projects", icon: Users },
     { href: "/create-project", label: "Create New Project", icon: Plus },
   ]
+
+  useEffect(() => {
+    if (!sidebarOpen || !isAuthenticated) return
+    const token = localStorage.getItem(TOKEN_STORAGE_KEY)
+    if (!token) {
+      setMyProjects([])
+      return
+    }
+
+    const loadMyProjects = async () => {
+      try {
+        const res = await fetch(`${API_BASE_URL}/projects/me`, {
+          headers: { Authorization: `Bearer ${token}` },
+        })
+        if (!res.ok) {
+          setMyProjects([])
+          return
+        }
+        const data = (await res.json()) as Array<{ project_id?: string; title?: string }>
+        setMyProjects(
+          data
+            .filter((p) => typeof p.project_id === "string" && p.project_id.trim())
+            .map((p) => ({
+              project_id: (p.project_id ?? "").trim(),
+              title: (p.title ?? "").trim() || "Untitled project",
+            })),
+        )
+      } catch {
+        setMyProjects([])
+      }
+    }
+
+    void loadMyProjects()
+  }, [sidebarOpen, isAuthenticated])
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault()
@@ -72,59 +114,95 @@ export function Navbar() {
 
   const handleLogout = () => {
     logout()
+    setSidebarOpen(false)
     navigate("/")
   }
 
   return (
     <>
-      <header className="sticky top-0 z-50 w-full border-b border-border bg-card">
-        <div className="container mx-auto flex h-16 items-center justify-between px-4">
-          <div className="flex items-center gap-2 md:gap-8">
-            <Link to="/" className="text-xl font-bold text-foreground md:text-2xl">
+      <header className="sticky top-0 z-[60] w-full border-b border-border bg-card">
+        <div className="w-full flex h-16 items-center justify-between px-4 md:px-6">
+          <div className="flex items-center gap-3">
+            <Sheet open={sidebarOpen} onOpenChange={setSidebarOpen}>
+              <SheetTrigger asChild>
+                <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-foreground">
+                  <Menu className="h-5 w-5" />
+                  <span className="sr-only">Open navigation menu</span>
+                </Button>
+              </SheetTrigger>
+              <SheetContent side="left" className="top-16 h-[calc(100vh-7rem)] w-64 [&>button]:hidden">
+                <nav className="mt-4 flex flex-col gap-2">
+                  {sidebarLinks.map((link) => {
+                    const Icon = link.icon
+                    return (
+                      <Link
+                        key={link.href}
+                        to={link.href}
+                        onClick={() => setSidebarOpen(false)}
+                        className={cn(
+                          "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors hover:bg-muted",
+                          pathname === link.href ? "text-primary" : "text-foreground"
+                        )}
+                      >
+                        <Icon className="h-4 w-4" />
+                        <span>{link.label}</span>
+                      </Link>
+                    )
+                  })}
+                  {isAuthenticated && (
+                    <div className="mt-2 rounded-md border border-border/70">
+                      <button
+                        type="button"
+                        onClick={() => setProjectsOpen((prev) => !prev)}
+                        className="flex w-full items-center justify-between rounded-md px-3 py-2 text-sm font-medium text-foreground transition-colors hover:bg-muted"
+                      >
+                        <span className="flex items-center gap-3">
+                          <FolderOpen className="h-4 w-4" />
+                          Projects
+                        </span>
+                        <ChevronDown
+                          className={cn(
+                            "h-4 w-4 transition-transform",
+                            projectsOpen && "rotate-180",
+                          )}
+                        />
+                      </button>
+                      {projectsOpen && (
+                        <div className="max-h-44 space-y-1 overflow-y-auto border-t border-border/70 px-2 py-2">
+                          {myProjects.length === 0 ? (
+                            <p className="px-2 py-1 text-xs text-muted-foreground">
+                              No projects yet.
+                            </p>
+                          ) : (
+                            myProjects.map((project) => (
+                              <Link
+                                key={project.project_id}
+                                to={`/project/${project.project_id}`}
+                                onClick={() => setSidebarOpen(false)}
+                                className="block rounded-md px-2 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                              >
+                                {project.title}
+                              </Link>
+                            ))
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </nav>
+              </SheetContent>
+            </Sheet>
+            <Link to="/" className="text-2xl font-bold text-foreground">
               DevSync
             </Link>
-            <nav className="flex items-center gap-1 md:hidden">
-              {navLinks.map((link) => {
-                const Icon = link.icon
-                return (
-                  <Button
-                    key={link.href}
-                    asChild
-                    variant="ghost"
-                    size="icon"
-                    className={cn(
-                      "h-9 w-9",
-                      pathname === link.href
-                        ? "text-primary"
-                        : "text-muted-foreground hover:text-primary"
-                    )}
-                  >
-                    <Link to={link.href} aria-label={link.label}>
-                      <Icon className="h-4 w-4" />
-                    </Link>
-                  </Button>
-                )
-              })}
-            </nav>
-            <nav className="hidden items-center gap-6 md:flex">
-              {navLinks.map((link) => (
-                <Link
-                  key={link.href}
-                  to={link.href}
-                  className={cn(
-                    "text-sm font-medium transition-colors hover:text-primary",
-                    pathname === link.href
-                      ? "text-primary"
-                      : "text-muted-foreground"
-                  )}
-                >
-                  {link.label}
-                </Link>
-              ))}
-            </nav>
           </div>
 
           <div className="flex items-center gap-2">
+            <Button asChild variant="ghost" size="icon" className="text-muted-foreground hover:text-foreground">
+              <Link to="/create-project" aria-label="Create new project">
+                <Plus className="h-5 w-5" />
+              </Link>
+            </Button>
             {showSearch ? (
               <form onSubmit={handleSearch} className="flex items-center gap-2">
                 <Input

@@ -16,9 +16,11 @@ import { MessagingHub } from './components/messaging-hub'
 import { CreateProjectPage } from './pages/CreateProjectPage'
 import { HomePage } from './pages/HomePage'
 import { ManageProjectsPage } from './pages/ManageProjectsPage'
+import { PopularPage } from './pages/PopularPage'
 import { ProfilePage } from './pages/ProfilePage'
 import { ProjectPage } from './pages/ProjectPage'
 import { UserProfilePage } from './pages/UserProfilePage'
+import { ShowcasePage } from './pages/ShowcasePage'
 
 function RootLayout() {
   return (
@@ -30,13 +32,20 @@ function RootLayout() {
 }
 
 const router = createBrowserRouter([
-  { path: '/', element: <HomePage /> },
-  { path: '/create-project', element: <CreateProjectPage /> },
-  { path: '/manage-projects', element: <ManageProjectsPage /> },
-  { path: '/profile', element: <ProfilePage /> },
-  { path: '/users/:userId', element: <UserProfilePage /> },
-  { path: '/project/:id', element: <ProjectPage /> },
-  { path: '*', element: <Navigate to="/" replace /> },
+  {
+    element: <RootLayout />,
+    children: [
+      { path: '/', element: <HomePage /> },
+      { path: '/popular', element: <PopularPage /> },
+      { path: '/showcase', element: <ShowcasePage /> },
+      { path: '/create-project', element: <CreateProjectPage /> },
+      { path: '/manage-projects', element: <ManageProjectsPage /> },
+      { path: '/profile', element: <ProfilePage /> },
+      { path: '/users/:userId', element: <UserProfilePage /> },
+      { path: '/project/:id', element: <ProjectPage /> },
+      { path: '*', element: <Navigate to="/" replace /> },
+    ],
+  },
 ])
 
 createRoot(document.getElementById('root')!).render(
