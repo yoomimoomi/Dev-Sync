@@ -18,8 +18,8 @@ import { Textarea } from '@/components/ui/textarea'
 import {
   APPLICATION_SUBMITTED_EVENT,
   API_BASE_URL,
+  authFetch,
   readApiErrorMessage,
-  TOKEN_STORAGE_KEY,
 } from '@/lib/api-config'
 import { useAuth } from '@/lib/auth-context'
 
@@ -58,12 +58,6 @@ export function JoinRequestDialog({
     e.preventDefault()
     setSubmitError(null)
 
-    const token = localStorage.getItem(TOKEN_STORAGE_KEY)
-    if (!token) {
-      setSubmitError('You are not logged in.')
-      return
-    }
-
     const trimmedProjectId = projectId.trim()
     if (!trimmedProjectId) {
       setSubmitError('Missing project identifier.')
@@ -90,11 +84,10 @@ export function JoinRequestDialog({
 
     setPending(true)
     try {
-      const res = await fetch(`${API_BASE_URL}/application`, {
+      const res = await authFetch(`${API_BASE_URL}/application`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify(requestPayload),
       })

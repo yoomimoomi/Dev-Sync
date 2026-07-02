@@ -8,7 +8,7 @@ from typing import Annotated
 from app.models.project import Project
 
 import jwt
-from fastapi import Depends, FastAPI, HTTPException, status, WebSocket, WebSocketDisconnect
+from fastapi import Depends, FastAPI, HTTPException, Request, Response, status, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from jwt.exceptions import ExpiredSignatureError, InvalidTokenError
@@ -51,6 +51,7 @@ from app.services.notifications import (
 ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "30"))
 SECRET_KEY = os.getenv("JWT_SECRET_KEY", "change-this-in-env")
 ALGORITHM = "HS256"
+AUTH_COOKIE_NAME = os.getenv("AUTH_COOKIE_NAME", "devsync_access_token").strip() or "devsync_access_token"
 
 # Supabase Dashboard → Settings → API → JWT Secret (read-only). Used only on the server to mint
 # short-lived Realtime tokens; must NOT match JWT_SECRET_KEY.
@@ -58,7 +59,7 @@ SUPABASE_JWT_SECRET = os.getenv("SUPABASE_JWT_SECRET", "").strip()
 SUPABASE_JWT_ISS = os.getenv("SUPABASE_JWT_ISS", "").strip()
 SUPABASE_REALTIME_TOKEN_MINUTES = int(os.getenv("SUPABASE_REALTIME_TOKEN_MINUTES", "55"))
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token", auto_error=False)
 password_hash = PasswordHash.recommended()
 logger = logging.getLogger(__name__)
 
@@ -106,8 +107,8 @@ app.add_middleware(
 )
 
 
-class Token(BaseModel):
-    access_token: str
+class LoginResponse(BaseModel):
+    message: str
     token_type: str
 
 
@@ -235,9 +236,35 @@ def create_access_token(data: dict, expires_delta: timedelta | None = None) -> s
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
 
-@app.post("/token", response_model=Token)
+def _set_auth_cookie(response: Response, request: Request, token: str) -> None:
+    max_age_seconds = int(timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES).total_seconds())
+    response.set_cookie(
+        key=AUTH_COOKIE_NAME,
+        value=token,
+        max_age=max_age_seconds,
+        expires=max_age_seconds,
+        path="/",
+        secure=request.url.scheme == "https",
+        httponly=True,
+        samesite="lax",
+    )
+
+
+def _clear_auth_cookie(response: Response, request: Request) -> None:
+    response.delete_cookie(
+        key=AUTH_COOKIE_NAME,
+        path="/",
+        secure=request.url.scheme == "https",
+        httponly=True,
+        samesite="lax",
+    )
+
+
+@app.post("/token", response_model=LoginResponse)
 async def login_for_access_token(
     form_data: Annotated[OAuth2PasswordRequestForm, Depends()],
+    request: Request,
+    response: Response,
     db: Session = Depends(get_db),
 ):
     # OAuth2PasswordRequestForm uses "username"; we treat it as the login email.
@@ -254,11 +281,19 @@ async def login_for_access_token(
         data={"sub": user.user_id.strip()},
         expires_delta=access_token_expires,
     )
-    return Token(access_token=access_token, token_type="bearer")
+    _set_auth_cookie(response, request, access_token)
+    return LoginResponse(message="Login successful", token_type="bearer")
+
+
+@app.post("/auth/logout", response_model=dict)
+async def logout(response: Response, request: Request):
+    _clear_auth_cookie(response, request)
+    return {"message": "Logged out"}
 
 
 def get_current_user(
-    token: Annotated[str, Depends(oauth2_scheme)],
+    token: Annotated[str | None, Depends(oauth2_scheme)],
+    request: Request,
     db: Session = Depends(get_db),
 ) -> Account:
     credentials_exception = HTTPException(
@@ -267,8 +302,12 @@ def get_current_user(
         headers={"WWW-Authenticate": "Bearer"},
     )
 
+    auth_token = token or request.cookies.get(AUTH_COOKIE_NAME)
+    if not auth_token:
+        raise credentials_exception
+
     try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        payload = jwt.decode(auth_token, SECRET_KEY, algorithms=[ALGORITHM])
         sub_raw = payload.get("sub")
         user_id: str | None = sub_raw.strip() if isinstance(sub_raw, str) else None
         token_data = TokenData(user_id=user_id)
@@ -896,10 +935,14 @@ async def patch_notifications_read(
 
 
 @app.websocket("/ws/chat")
-async def websocket_chat(websocket: WebSocket, token: str, db: Session = Depends(get_db)):
+async def websocket_chat(websocket: WebSocket, token: str | None = None, db: Session = Depends(get_db)):
     # If decode fails we close before accept(); Uvicorn logs that as HTTP 403 on the upgrade request.
+    auth_token = token or websocket.cookies.get(AUTH_COOKIE_NAME)
+    if not auth_token:
+        await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+        return
     try:
-        jwt_payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        jwt_payload = jwt.decode(auth_token, SECRET_KEY, algorithms=[ALGORITHM])
         sub = jwt_payload.get("sub")
     except ExpiredSignatureError:
         logger.warning("WebSocket /ws/chat rejected: access token expired (log in again)")
@@ -908,7 +951,7 @@ async def websocket_chat(websocket: WebSocket, token: str, db: Session = Depends
     except InvalidTokenError as exc:
         logger.warning(
             "WebSocket /ws/chat rejected: invalid token (%s). "
-            "Check JWT_SECRET_KEY matches the server that issued the token, or clear stale localStorage and re-login.",
+            "Check JWT_SECRET_KEY matches the server that issued the token, or clear stale auth cookie and re-login.",
             exc,
         )
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION)

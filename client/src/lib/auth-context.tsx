@@ -1,6 +1,7 @@
 "use client"
 
 import { createContext, useContext, useState, useCallback, useEffect, type ReactNode } from "react"
+import { API_BASE_URL, authFetch } from "@/lib/api-config"
 import { resetSupabaseRealtimeClient } from "@/lib/supabase-realtime"
 
 interface User {
@@ -22,9 +23,6 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
-const TOKEN_STORAGE_KEY = "devsync_access_token"
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000"
-
 async function readErrorMessage(res: Response): Promise<string> {
   try {
     const body = (await res.json()) as unknown
@@ -45,33 +43,25 @@ async function readErrorMessage(res: Response): Promise<string> {
   return `${res.status} ${res.statusText}`.trim()
 }
 
-type TokenResponse = { access_token: string; token_type: string }
 type AccountRead = { user_id: string; name: string; email: string }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
 
-  const fetchMeWithToken = useCallback(async (token: string): Promise<User | null> => {
-    const res = await fetch(`${API_BASE_URL}/user/me`, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
+  const fetchMe = useCallback(async (): Promise<User | null> => {
+    const res = await authFetch(`${API_BASE_URL}/user/me`)
     if (!res.ok) return null
     const me = (await res.json()) as AccountRead
     return { id: me.user_id, name: me.name, email: me.email }
   }, [])
 
   useEffect(() => {
-    const token = localStorage.getItem(TOKEN_STORAGE_KEY)
-    if (!token) return
-    fetchMeWithToken(token)
+    fetchMe()
       .then((me) => {
         if (me) setUser(me)
-        else localStorage.removeItem(TOKEN_STORAGE_KEY)
       })
-      .catch(() => {
-        localStorage.removeItem(TOKEN_STORAGE_KEY)
-      })
-  }, [fetchMeWithToken])
+      .catch(() => {})
+  }, [fetchMe])
 
   const login = useCallback(
     async (email: string, password: string): Promise<AuthResult> => {
@@ -79,7 +69,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       body.set("username", email)
       body.set("password", password)
 
-      const res = await fetch(`${API_BASE_URL}/token`, {
+      const res = await authFetch(`${API_BASE_URL}/token`, {
         method: "POST",
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
         body,
@@ -87,17 +77,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       if (!res.ok) return { success: false, error: await readErrorMessage(res) }
 
-      const token = (await res.json()) as TokenResponse
-      localStorage.setItem(TOKEN_STORAGE_KEY, token.access_token)
+      await res.json().catch(() => null)
       resetSupabaseRealtimeClient()
 
-      const me = await fetchMeWithToken(token.access_token)
+      const me = await fetchMe()
       if (!me) return { success: false, error: "Could not validate account" }
 
       setUser(me)
       return { success: true }
     },
-    [fetchMeWithToken]
+    [fetchMe]
   )
 
   const register = useCallback(
@@ -117,7 +106,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   )
 
   const logout = useCallback(() => {
-    localStorage.removeItem(TOKEN_STORAGE_KEY)
+    void authFetch(`${API_BASE_URL}/auth/logout`, { method: "POST" })
     resetSupabaseRealtimeClient()
     setUser(null)
   }, [])

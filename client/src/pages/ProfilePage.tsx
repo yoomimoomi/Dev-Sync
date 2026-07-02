@@ -5,9 +5,7 @@ import { ProjectCard, type Project } from '@/components/project-card'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Mail, Calendar, Edit, User } from 'lucide-react'
-
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000'
-const TOKEN_STORAGE_KEY = 'devsync_access_token'
+import { API_BASE_URL, authFetch } from '@/lib/api-config'
 
 type Profile = {
   user_id: string
@@ -36,16 +34,9 @@ export function ProfilePage() {
   useEffect(() => {
     const fetchProfilePageData = async () => {
       try {
-        const token = localStorage.getItem(TOKEN_STORAGE_KEY)
-        if (!token) return
-
         const [profileResponse, projectsResponse] = await Promise.all([
-          fetch(`${API_BASE_URL}/user/me`, {
-            headers: { Authorization: `Bearer ${token}` },
-          }),
-          fetch(`${API_BASE_URL}/projects/me`, {
-            headers: { Authorization: `Bearer ${token}` },
-          }),
+          authFetch(`${API_BASE_URL}/user/me`),
+          authFetch(`${API_BASE_URL}/projects/me`),
         ])
 
         if (!profileResponse.ok) throw new Error('Failed to fetch profile')

@@ -1,5 +1,5 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js"
-import { API_BASE_URL, SUPABASE_ANON_KEY, SUPABASE_URL, TOKEN_STORAGE_KEY } from "@/lib/api-config"
+import { API_BASE_URL, authFetch, SUPABASE_ANON_KEY, SUPABASE_URL } from "@/lib/api-config"
 import { parseChatTimestamp } from "@/lib/datetime-display"
 
 let cachedClient: SupabaseClient | null = null
@@ -33,19 +33,12 @@ function parseJwtExpMs(jwt: string): number | null {
  * The browser never sees `SUPABASE_JWT_SECRET`; login still uses `JWT_SECRET_KEY`.
  */
 export async function fetchSupabaseRealtimeAccessToken(): Promise<string | null> {
-  const api = localStorage.getItem(TOKEN_STORAGE_KEY)
-  if (!api) {
-    brokerJwt = null
-    return null
-  }
   const now = Date.now()
   if (brokerJwt && brokerJwt.expMs > now + 60_000) {
     return brokerJwt.token
   }
 
-  const res = await fetch(`${API_BASE_URL}/realtime/token`, {
-    headers: { Authorization: `Bearer ${api}` },
-  })
+  const res = await authFetch(`${API_BASE_URL}/realtime/token`)
   if (!res.ok) {
     brokerJwt = null
     return null

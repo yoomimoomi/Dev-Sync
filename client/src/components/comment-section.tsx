@@ -6,11 +6,9 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Textarea } from "@/components/ui/textarea"
+import { API_BASE_URL, authFetch } from "@/lib/api-config"
 import { useAuth } from "@/lib/auth-context"
 import type { Comment } from "@/lib/mock-data"
-
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000"
-const TOKEN_STORAGE_KEY = "devsync_access_token"
 
 type ApiComment = {
   user_id: string
@@ -132,21 +130,14 @@ export function CommentSection({ projectId, initialComments }: CommentSectionPro
   const handleAddComment = async () => {
     if (!newComment.trim() || !user) return
 
-    const token = localStorage.getItem(TOKEN_STORAGE_KEY)
-    if (!token) {
-      setError("You need to be logged in to post a comment.")
-      return
-    }
-
     setIsPosting(true)
     setError("")
 
     try {
-      const response = await fetch(`${API_BASE_URL}/comment`, {
+      const response = await authFetch(`${API_BASE_URL}/comment`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
           project_id: projectId,

@@ -13,10 +13,10 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 import { Textarea } from '@/components/ui/textarea'
 import {
   API_BASE_URL,
+  authFetch,
   OPEN_CHAT_EVENT,
   type OpenChatPayload,
   readApiErrorMessage,
-  TOKEN_STORAGE_KEY,
 } from '@/lib/api-config'
 import { useChatRealtime } from '@/lib/chat-realtime-context'
 import { useAuth } from '@/lib/auth-context'
@@ -86,17 +86,14 @@ export function MessagingHub() {
   // ── Fetch conversation list ──────────────────────────────────────────────────
 
   const fetchConversations = useCallback(async (opts?: { silent?: boolean }) => {
-    const token = localStorage.getItem(TOKEN_STORAGE_KEY)
-    if (!token) return
     const silent = opts?.silent ?? false
     if (!silent) {
       setConvLoading(true)
       setConvError(null)
     }
     try {
-      const res = await fetch(`${API_BASE_URL}/messages/conversations`, {
-        headers: { Authorization: `Bearer ${token}` },
-      })
+      const res = await authFetch(`${API_BASE_URL}/messages/conversations`)
+      if (res.status === 401) return
       if (!res.ok) {
         setConvError(await readApiErrorMessage(res))
         return
@@ -223,16 +220,13 @@ export function MessagingHub() {
   // ── Load history for active chat (shared WebSocket stays open via ChatRealtimeProvider) ──
   const loadActiveConversationHistory = useCallback(
     async (conv: ConversationRow, opts?: { markRead?: boolean }) => {
-      const token = localStorage.getItem(TOKEN_STORAGE_KEY)
-      if (!token) {
+      const res = await authFetch(
+        `${API_BASE_URL}/messages/application/${encodeURIComponent(conv.project_id)}/${encodeURIComponent(conv.peer_user_id)}`,
+      )
+      if (res.status === 401) {
         setLoadError('You are not logged in.')
         return
       }
-
-      const res = await fetch(
-        `${API_BASE_URL}/messages/application/${encodeURIComponent(conv.project_id)}/${encodeURIComponent(conv.peer_user_id)}`,
-        { headers: { Authorization: `Bearer ${token}` } },
-      )
       if (!res.ok) {
         setLoadError(await readApiErrorMessage(res))
         setHistoryLoaded(true)

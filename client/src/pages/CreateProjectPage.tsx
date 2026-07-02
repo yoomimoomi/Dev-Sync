@@ -16,6 +16,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { API_BASE_URL, authFetch } from '@/lib/api-config'
 
 const suggestedTags = [
   'React',
@@ -36,9 +37,6 @@ const suggestedTags = [
   'GraphQL',
   'REST API',
 ]
-
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000'
-const TOKEN_STORAGE_KEY = 'devsync_access_token'
 
 export function CreateProjectPage() {
   const navigate = useNavigate()
@@ -67,12 +65,6 @@ export function CreateProjectPage() {
     e.preventDefault()
     setError('')
 
-    const token = localStorage.getItem(TOKEN_STORAGE_KEY)
-    if (!token) {
-      setError('You need to be logged in to create a project.')
-      return
-    }
-
     if (!category || !skillLevel || !teamSize) {
       setError('Please choose a category, skill level, and team size.')
       return
@@ -81,11 +73,10 @@ export function CreateProjectPage() {
     setIsSubmitting(true)
 
     try {
-      const response = await fetch(`${API_BASE_URL}/project`, {
+      const response = await authFetch(`${API_BASE_URL}/project`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
           title,

@@ -18,8 +18,8 @@ import {
 import {
   API_BASE_URL,
   APPLICATION_SUBMITTED_EVENT,
+  authFetch,
   openChatHub,
-  TOKEN_STORAGE_KEY,
 } from '@/lib/api-config'
 
 type JoinRequest = {
@@ -49,18 +49,10 @@ export function ManageProjectsPage() {
   }, [])
 
   const loadDashboard = useCallback(async () => {
-    const token = localStorage.getItem(TOKEN_STORAGE_KEY)
-    if (!token) {
-      setProjects([])
-      setJoinRequests([])
-      return
-    }
-
     try {
-      const headers = { Authorization: `Bearer ${token}` }
       const [projRes, appRes] = await Promise.all([
-        fetch(`${API_BASE_URL}/projects/me`, { headers }),
-        fetch(`${API_BASE_URL}/applications/my-projects`, { headers }),
+        authFetch(`${API_BASE_URL}/projects/me`),
+        authFetch(`${API_BASE_URL}/applications/my-projects`),
       ])
 
       if (projRes.ok) {
@@ -93,16 +85,13 @@ export function ManageProjectsPage() {
   }, [loadDashboard])
 
   const handleAccept = async (req: JoinRequest) => {
-    const token = localStorage.getItem(TOKEN_STORAGE_KEY)
-    if (!token) return
     const key = `${req.user_id}-${req.project_id}-accept`
     setRequestActionKey(key)
     try {
-      const res = await fetch(
+      const res = await authFetch(
         `${API_BASE_URL}/applications/${req.project_id}/${req.user_id}/accept`,
         {
           method: 'PATCH',
-          headers: { Authorization: `Bearer ${token}` },
         },
       )
       if (!res.ok) throw new Error('Failed to accept request')
@@ -115,16 +104,13 @@ export function ManageProjectsPage() {
   }
 
   const handleDecline = async (req: JoinRequest) => {
-    const token = localStorage.getItem(TOKEN_STORAGE_KEY)
-    if (!token) return
     const key = `${req.user_id}-${req.project_id}-decline`
     setRequestActionKey(key)
     try {
-      const res = await fetch(
+      const res = await authFetch(
         `${API_BASE_URL}/applications/${req.project_id}/${req.user_id}/decline`,
         {
           method: 'PATCH',
-          headers: { Authorization: `Bearer ${token}` },
         },
       )
       if (!res.ok) throw new Error('Failed to decline request')

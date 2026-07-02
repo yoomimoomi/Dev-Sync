@@ -22,8 +22,8 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 import { Textarea } from '@/components/ui/textarea'
 import {
   API_BASE_URL,
+  authFetch,
   readApiErrorMessage,
-  TOKEN_STORAGE_KEY,
 } from '@/lib/api-config'
 import { useChatRealtime } from '@/lib/chat-realtime-context'
 import { useAuth } from '@/lib/auth-context'
@@ -78,16 +78,13 @@ export function ApplicationChatDialog({
 
   const loadHistory = useCallback(
     async (opts?: { markRead?: boolean }) => {
-      const token = localStorage.getItem(TOKEN_STORAGE_KEY)
-      if (!token) {
+      const res = await authFetch(
+        `${API_BASE_URL}/messages/application/${encodeURIComponent(projectId)}/${encodeURIComponent(peerUserId)}`,
+      )
+      if (res.status === 401) {
         setLoadError('You are not logged in.')
         return
       }
-
-      const res = await fetch(
-        `${API_BASE_URL}/messages/application/${encodeURIComponent(projectId)}/${encodeURIComponent(peerUserId)}`,
-        { headers: { Authorization: `Bearer ${token}` } },
-      )
       if (!res.ok) {
         setLoadError(await readApiErrorMessage(res))
         setHistoryLoaded(true)

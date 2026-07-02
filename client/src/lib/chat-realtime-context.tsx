@@ -10,7 +10,7 @@ import {
   useState,
   type ReactNode,
 } from "react"
-import { getWebSocketBaseUrl, isSupabaseRealtimeConfigured, TOKEN_STORAGE_KEY } from "@/lib/api-config"
+import { getWebSocketBaseUrl, isSupabaseRealtimeConfigured } from "@/lib/api-config"
 import { useAuth } from "@/lib/auth-context"
 import { getSupabaseRealtimeClient, mapMessageInsertToApplicationMessage } from "@/lib/supabase-realtime"
 
@@ -50,13 +50,7 @@ export function ChatRealtimeProvider({ children }: { children: ReactNode }) {
       return
     }
 
-    const token = localStorage.getItem(TOKEN_STORAGE_KEY)
-    if (!token) {
-      setReady(false)
-      return
-    }
-
-    const baseUrl = `${getWebSocketBaseUrl()}/ws/chat?token=${encodeURIComponent(token)}`
+    const baseUrl = `${getWebSocketBaseUrl()}/ws/chat`
     let cancelled = false
     let retryTimer: ReturnType<typeof setTimeout> | null = null
     let attempt = 0

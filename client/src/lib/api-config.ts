@@ -20,6 +20,14 @@ export function getWebSocketBaseUrl(): string {
 
 export const TOKEN_STORAGE_KEY = 'devsync_access_token'
 
+/**
+ * Authenticated API requests should include cookies (HttpOnly session token).
+ * Keeps one shared call-site pattern across the app.
+ */
+export function authFetch(input: RequestInfo | URL, init: RequestInit = {}): Promise<Response> {
+  return fetch(input, { ...init, credentials: 'include' })
+}
+
 /** Fired after a successful POST /application so dependent pages can refresh. */
 export const APPLICATION_SUBMITTED_EVENT = 'devsync-application-submitted'
 

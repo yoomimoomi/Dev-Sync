@@ -4,7 +4,7 @@ import { Bell, UserPlus, CheckCircle, MessageSquare, RefreshCw } from "lucide-re
 import { Button } from "@/components/ui/button"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import type { Notification } from "@/lib/mock-data"
-import { API_BASE_URL, readApiErrorMessage, TOKEN_STORAGE_KEY } from "@/lib/api-config"
+import { API_BASE_URL, authFetch, readApiErrorMessage } from "@/lib/api-config"
 import { useAuth } from "@/lib/auth-context"
 import { useChatRealtime } from "@/lib/chat-realtime-context"
 import { formatSmartDayTime } from "@/lib/datetime-display"
@@ -68,16 +68,13 @@ export function NotificationPopover() {
   const [open, setOpen] = useState(false)
 
   const fetchNotifications = useCallback(async () => {
-    const token = localStorage.getItem(TOKEN_STORAGE_KEY)
-    if (!token) {
-      setNotifications([])
-      return
-    }
     setLoadError(null)
     try {
-      const res = await fetch(`${API_BASE_URL}/notifications`, {
-        headers: { Authorization: `Bearer ${token}` },
-      })
+      const res = await authFetch(`${API_BASE_URL}/notifications`)
+      if (res.status === 401) {
+        setNotifications([])
+        return
+      }
       if (!res.ok) {
         setLoadError(await readApiErrorMessage(res))
         return
@@ -134,13 +131,10 @@ export function NotificationPopover() {
   const markAllAsRead = async () => {
     const unreadIds = notifications.filter((n) => !n.read).map((n) => n.id)
     if (unreadIds.length === 0) return
-    const token = localStorage.getItem(TOKEN_STORAGE_KEY)
-    if (!token) return
     try {
-      const res = await fetch(`${API_BASE_URL}/notifications/read`, {
+      const res = await authFetch(`${API_BASE_URL}/notifications/read`, {
         method: "PATCH",
         headers: {
-          Authorization: `Bearer ${token}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({ ids: unreadIds }),
@@ -153,13 +147,10 @@ export function NotificationPopover() {
   }
 
   const markAsRead = async (id: string) => {
-    const token = localStorage.getItem(TOKEN_STORAGE_KEY)
-    if (!token) return
     try {
-      const res = await fetch(`${API_BASE_URL}/notifications/read`, {
+      const res = await authFetch(`${API_BASE_URL}/notifications/read`, {
         method: "PATCH",
         headers: {
-          Authorization: `Bearer ${token}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({ ids: [id] }),

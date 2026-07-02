@@ -21,7 +21,7 @@ import {
 } from "@/components/ui/dialog"
 import { cn } from "@/lib/utils"
 import { useAuth } from "@/lib/auth-context"
-import { API_BASE_URL, TOKEN_STORAGE_KEY } from "@/lib/api-config"
+import { API_BASE_URL, authFetch } from "@/lib/api-config"
 import { useSearch } from "@/lib/search-context"
 import { useTheme } from "@/lib/theme-context"
 
@@ -57,17 +57,10 @@ export function Navbar() {
 
   useEffect(() => {
     if (!sidebarOpen || !isAuthenticated) return
-    const token = localStorage.getItem(TOKEN_STORAGE_KEY)
-    if (!token) {
-      setMyProjects([])
-      return
-    }
 
     const loadMyProjects = async () => {
       try {
-        const res = await fetch(`${API_BASE_URL}/projects/me`, {
-          headers: { Authorization: `Bearer ${token}` },
-        })
+        const res = await authFetch(`${API_BASE_URL}/projects/me`)
         if (!res.ok) {
           setMyProjects([])
           return
